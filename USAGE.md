@@ -2,7 +2,7 @@
 
 [Back to README](README.md)
 
-- [Run the service](#run-from-this-checkout)
+- [Run the service](#install-and-run)
 - [Prompts and language](#default-presence-prompts)
 - [Automatic summaries and models](#automatic-generation-and-model-selection)
 - [Images and display settings](#images-and-display-settings)
@@ -12,28 +12,25 @@
 - [Configuration and platforms](#configuration-and-platform-notes)
 - [Development](#development)
 
-Commands below use `node dist/cli.js` or its installed alias `adp`. When running from a checkout without a global installation, replace `adp` with `node dist/cli.js`.
+Commands below use `adp`, the short alias for `agent-discord-presence`. To run from source, see [Development](#development).
 
-## Run from this checkout
+## Install and run
 
-Requires Node.js 22 or newer and the Discord desktop app. Build once:
+Requires Node.js 22 or newer and the Discord desktop app. Install from npm:
 
 ```sh
-npm install
-npm run build
+npm install --global agent-discord-presence
 ```
 
 Start the service in a terminal (keep it running):
 
 ```sh
-npm start
+adp start
 ```
 
 To start in the background and continue using the same terminal:
 
 ```sh
-npm start -- --background
-# Or, when installed:
 adp start -b
 ```
 
@@ -44,22 +41,20 @@ The default Application ID, `1549160807705870418`, is defined in `src/constants.
 For a preview without Discord:
 
 ```sh
-npm start -- --dry-run
+adp start --dry-run
 ```
 
 In another terminal, send sample lifecycle events:
 
 ```sh
-printf '%s\n' '{"session_id":"demo","hook_event_name":"UserPromptSubmit"}' | node dist/cli.js hook codex
-node dist/cli.js status
-printf '%s\n' '{"session_id":"demo","hook_event_name":"SessionEnd"}' | node dist/cli.js hook codex
+printf '%s\n' '{"session_id":"demo","hook_event_name":"UserPromptSubmit"}' | adp hook codex
+adp status
+printf '%s\n' '{"session_id":"demo","hook_event_name":"SessionEnd"}' | adp hook codex
 ```
 
 Stop the service from another terminal:
 
 ```sh
-node dist/cli.js stop
-# Or, when installed:
 adp stop
 ```
 
@@ -95,7 +90,7 @@ adp preset apply minimal
 
 `show` previews without writing. `apply` validates and saves the merged settings to the same user config as `config set`. Nested objects merge, omitted fields remain unchanged, and arrays or `null` replace the existing value. For example, applying `codex` preserves an existing small image and model override. Invalid presets leave the config untouched. To clear images, use `"presence": {"assets": null}`; to clear buttons, use `"presence": {"buttons": []}`. Applying `default` resets only `customPrompt`, not all settings.
 
-The bundled presets are `default`, `minimal`, `playful`, and `codex`. Edit this checkout's `presets.json` to add presets; the file is included in the npm package. Existing string-valued prompt presets must be converted to objects such as `{"customPrompt": "..."}`. `adp prompt NAME` still previews only the prompt-related fields, without applying the preset. Saved presentation settings update in the running service without a restart; model settings affect new summary jobs.
+The bundled presets are `default`, `minimal`, `playful`, and `codex`. To add bundled presets when developing from source, edit `presets.json`; the file is included in the npm package. For persistent personal settings, use `adp config set`. Existing string-valued prompt presets must be converted to objects such as `{"customPrompt": "..."}`. `adp prompt NAME` still previews only the prompt-related fields, without applying the preset. Saved presentation settings update in the running service without a restart; model settings affect new summary jobs.
 
 ## Default presence prompts
 
@@ -106,9 +101,9 @@ Automatic summaries are enabled by default. After a completed reply, the adapter
 Print the complete system prompt, configuration, and JSON output schema:
 
 ```sh
-node dist/cli.js prompt
-node dist/cli.js prompt minimal
-node dist/cli.js prompt playful
+adp prompt
+adp prompt minimal
+adp prompt playful
 ```
 
 The default produces a short English action phrase (`topic`) and a complementary `subtitle`, limited to 72 characters each. The subtitle can be empty. Language and tone can be changed through `customPrompt`; output structure, length, accuracy, and public-information constraints remain in effect. For example:
@@ -184,7 +179,7 @@ Generation is serialized, limited to one active request with a bounded queue, an
 
 Assistant text is transient in this service: it is not stored in session state or printed by status. The chosen provider receives it, and native CLIs may maintain their own logs/history as described above. The prompt requests public wording and omission of sensitive details; text/schema validation is not a guarantee of semantic redaction.
 
-A live generation smoke check uses public fixture text and a private dry-run service, without publishing the fixture to Discord:
+From a built source checkout, a live generation smoke check uses public fixture text and a private dry-run service, without publishing the fixture to Discord:
 
 ```sh
 node scripts/smoke-generation.mjs CURRENT_MODEL_ID
@@ -279,54 +274,54 @@ Model integrations can import `summaryTarget` and `publishSummary` from `agent-d
 
 ## Connect your agents
 
-Start the shared service before using any adapter. Use one installation method per agent to avoid duplicate hooks. The `config codex|claude-code|opencode|pi` commands only print adapter configuration; `config set` saves this plugin’s summary settings. Generated files refer to the current checkout, so rebuild after changes and regenerate them if you move the checkout.
+Start the shared service before using any adapter. Use one installation method per agent to avoid duplicate hooks. The `config codex|claude-code|opencode|pi` commands only print adapter configuration; `config set` saves this plugin’s summary settings. Generated configuration uses absolute paths to the installed package and, for hooks, the Node.js executable. Regenerate it if either location changes, such as after switching Node.js installations.
 
 ### Codex
 
 Generate hooks with absolute executable paths:
 
 ```sh
-node dist/cli.js config codex
+adp config codex
 ```
 
 Merge the generated `hooks` entries into `~/.codex/hooks.json` (or the project's `.codex/hooks.json`). Preserve existing hooks. In Codex, open `/hooks` and review/trust the new hooks, then start a new session.
 
-A distributable plugin is also included at `plugins/codex/agent-discord-presence`. It uses the default `hooks/hooks.json` discovery convention. Its commands require `agent-discord-presence` on PATH; install this checkout with `npm install --global .` before adding it to your own Codex plugin marketplace. No marketplace registration or global install is performed by this project.
+A distributable plugin is also included at `plugins/codex/agent-discord-presence`. The package directory is `agent-discord-presence` inside the global modules directory shown by `npm root --global`. It uses the default `hooks/hooks.json` discovery convention. Its commands require `agent-discord-presence` on PATH, provided by the global npm installation above. Add the plugin to your own Codex plugin marketplace; marketplace registration is not automatic.
 
 ### Claude Code
 
 ```sh
-node dist/cli.js config claude-code
+adp config claude-code
 ```
 
 Merge the generated `hooks` entries into `~/.claude/settings.json` (or project `.claude/settings.json`), preserving existing settings. Restart Claude Code.
 
-Alternatively, after `npm install --global .`, load the bundled plugin:
+Alternatively, after the global npm installation above, load the bundled plugin (POSIX shell):
 
 ```sh
-claude --plugin-dir /absolute/path/to/agent-discord-presence/plugins/claude-code/agent-discord-presence
+claude --plugin-dir "$(npm root --global)/agent-discord-presence/plugins/claude-code/agent-discord-presence"
 ```
 
 ### OpenCode
 
 ```sh
-node dist/cli.js config opencode
+adp config opencode
 ```
 
 Save the printed export statement in `~/.config/opencode/plugins/agent-presence.ts` or `.opencode/plugins/agent-presence.ts`, creating the directory if needed. Restart OpenCode. The adapter uses OpenCode's `event` subscription and handles `session.status`, `session.idle`, `session.error`, and permission events. It works with the documented plugin API at `opencode.ai/docs/plugins/`; compatibility with a different major plugin API should be checked before upgrading.
 
 ### Pi
 
-For a one-off local session:
+For a one-off session using the globally installed package (POSIX shell):
 
 ```sh
-pi -e /absolute/path/to/agent-discord-presence/dist/adapters/pi.js
+pi -e "$(npm root --global)/agent-discord-presence/dist/adapters/pi.js"
 ```
 
 For automatic loading:
 
 ```sh
-node dist/cli.js config pi
+adp config pi
 ```
 
 Save the printed export statement in `~/.pi/agent/extensions/agent-presence.ts`. Reload extensions or restart Pi. The npm package also declares its extension in the `pi.extensions` metadata.
@@ -336,9 +331,9 @@ Pi must provide `agent_settled`, `ui_prompt_start`, and `ui_prompt_end` events. 
 ## Session selection and lifecycle
 
 ```sh
-node dist/cli.js status
-node dist/cli.js pin 'codex:SESSION_ID'
-node dist/cli.js unpin
+adp status
+adp pin 'codex:SESSION_ID'
+adp unpin
 ```
 
 Copy an exact session key from `status`. Working/waiting sessions rank above errors, then idle sessions. Within a rank, the most recently updated session wins. Heartbeats do not change that ordering. Elapsed time measures the observed session lifetime, including idle time, rather than billable agent execution time.
@@ -364,6 +359,18 @@ The runtime has no production npm dependencies. Unix uses a per-user directory a
 SSH, containers, and remote agent services cannot reach the desktop Discord socket automatically. Run the daemon on the desktop and arrange an explicit local socket forwarding mechanism before using remote adapters. That forwarding is outside this first version.
 
 ## Development
+
+From a source checkout, install dependencies and build:
+
+```sh
+npm install
+npm run build
+node dist/cli.js start
+```
+
+When running from this checkout without a global installation, replace `adp` in the examples above with `node dist/cli.js`. Rebuild after source changes, and regenerate adapter configuration if you move the checkout.
+
+Run the checks:
 
 ```sh
 npm test

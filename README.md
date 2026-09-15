@@ -16,12 +16,11 @@ Discord Rich Presence for Codex, Claude Code, OpenCode, and Pi, powered by one l
 Requires Node.js 22+ and the Discord desktop app.
 
 ```sh
-npm install
-npm run build
-npm start
+npm install --global agent-discord-presence
+adp start
 ```
 
-To release the terminal after startup, use `npm start -- --background` (or `adp start -b` when installed). Then connect your agent:
+To release the terminal after startup, use `adp start -b`. Then connect your agent:
 
 - [Codex](USAGE.md#codex)
 - [Claude Code](USAGE.md#claude-code)
@@ -30,7 +29,7 @@ To release the terminal after startup, use `npm start -- --background` (or `adp 
 
 A default Discord Application ID is included; no bot token is needed. Automatic startup is not configured.
 
-Stop the service with `node dist/cli.js stop` (or `adp stop` when installed), or press Ctrl+C in its terminal. This clears its Discord activity.
+Stop the service with `adp stop`, or press Ctrl+C in its terminal. This clears its Discord activity.
 
 ## Documentation
 
