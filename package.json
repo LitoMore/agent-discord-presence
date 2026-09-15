@@ -1,0 +1,46 @@
+{
+  "name": "agent-discord-presence",
+  "version": "0.1.0",
+  "author": "LitoMore",
+  "description": "Shared Discord Rich Presence for Codex, Claude Code, OpenCode, and Pi",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "agent-discord-presence": "dist/cli.js",
+    "adp": "dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/client.js",
+    "./opencode": "./dist/adapters/opencode.js",
+    "./pi": "./dist/adapters/pi.js",
+    "./prompts": "./dist/prompts.js",
+    "./presets": "./dist/presets.js"
+  },
+  "files": [
+    "dist",
+    "plugins",
+    "prompts",
+    "presets.json",
+    "README.md",
+    "USAGE.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/adapters/pi.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.js",
+    "start": "node dist/cli.js start",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  }
+}

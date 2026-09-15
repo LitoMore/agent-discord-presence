@@ -1,0 +1,17 @@
+{
+  "name": "agent-discord-presence",
+  "version": "0.1.0",
+  "description": "Share coding activity with Discord through the local presence service.",
+  "interface": {
+    "displayName": "Agent Discord Presence",
+    "shortDescription": "Show Codex activity in Discord.",
+    "longDescription": "Reports lifecycle state to the shared local Discord Rich Presence service.",
+    "category": "Productivity",
+    "developerName": "Agent Discord Presence contributors",
+    "defaultPrompt": "Help me set up Discord Rich Presence for my coding agents.",
+    "capabilities": []
+  },
+  "author": {
+    "name": "Agent Discord Presence contributors"
+  }
+}

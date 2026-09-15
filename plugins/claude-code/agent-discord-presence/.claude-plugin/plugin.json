@@ -1,0 +1,5 @@
+{
+  "name": "agent-discord-presence",
+  "version": "0.1.0",
+  "description": "Share Claude Code activity with Discord through the local presence service."
+}
