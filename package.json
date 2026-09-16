@@ -1,6 +1,6 @@
 {
   "name": "agent-discord-presence",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "LitoMore",
   "description": "Shared Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness",
   "type": "module",
