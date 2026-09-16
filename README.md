@@ -13,14 +13,28 @@ Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness
 
 ## Quick start
 
-Requires Node.js 22+ and the Discord desktop app.
+The easiest way to get started is to let your agent handle the setup. Paste this repository link into your agent, or copy the prompt below:
+
+```text
+Install and configure agent-discord-presence for the agent I'm using:
+https://github.com/LitoMore/agent-discord-presence
+
+Read the README and USAGE.md, check the prerequisites, install the package,
+and set up the hooks or plugin for my agent while preserving my existing
+configuration. Start the service in the background, check its status, and
+let me know if I need to restart my agent or take any other steps.
+```
+
+You'll need Node.js 22+ and the Discord desktop app. Open Discord and sign in before checking your presence. A default Discord Application ID is included; no bot token is needed.
+
+Prefer to set it up yourself? Install the package and start the service in the background:
 
 ```sh
 npm install --global agent-discord-presence
-adp start
+adp start -b
 ```
 
-To release the terminal after startup, use `adp start -b`. Then connect your agent:
+Then follow the setup instructions for your agent:
 
 - [Codex](USAGE.md#codex)
 - [Claude Code](USAGE.md#claude-code)
@@ -28,9 +42,9 @@ To release the terminal after startup, use `adp start -b`. Then connect your age
 - [Pi](USAGE.md#pi)
 - [DeepSeek Harness](USAGE.md#deepseek-harness)
 
-A default Discord Application ID is included; no bot token is needed. Automatic startup is not configured.
+Once connected, give your agent a task and check Discord for its activity. Run `adp status` to check the service and Discord connection.
 
-Stop the service with `adp stop`, or press Ctrl+C in its terminal. This clears its Discord activity.
+Stop the service with `adp stop`; this clears its Discord activity. To run in the foreground instead, use `adp start` and stop it with Ctrl+C. Automatic startup is not configured, so run `adp start -b` again after restarting your computer.
 
 ## Documentation
 
