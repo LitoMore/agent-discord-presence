@@ -1,10 +1,7 @@
-import {readFileSync} from 'node:fs';
-import {loadSettings, saveSettings, validateSettings, type Settings} from './settings.js';
-
-export type Preset = Partial<Settings>;
-export const PRESETS: Readonly<Record<string, Preset>> = JSON.parse(
-  readFileSync(new URL('../presets.json', import.meta.url), 'utf8'),
-);
+import {loadSettings, saveSettings, validateSettings, mergeSettings, type Configuration} from './settings.js';
+import type {Agent} from './protocol.js';
+import {PRESETS, type Preset} from './preset-data.js';
+export {PRESETS, type Preset};
 
 export function getPreset(name: string): Preset {
   if (!Object.hasOwn(PRESETS, name)) throw new Error(`Choose a preset: ${Object.keys(PRESETS).join(', ')}`);
@@ -14,21 +11,13 @@ export function getPreset(name: string): Preset {
 }
 
 /** Merge objects recursively; arrays and null replace existing values. */
-export function mergePreset(settings: Settings, preset: unknown): Settings {
+export function mergePreset(settings: Configuration, preset: unknown): Configuration {
   validateSettings(preset);
-  function merge(base: unknown, patch: unknown): unknown {
-    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return structuredClone(patch);
-    const result: Record<string, unknown> = base && typeof base === 'object' && !Array.isArray(base)
-      ? structuredClone(base) as Record<string, unknown> : {};
-    for (const [key, value] of Object.entries(patch)) {
-      if (['__proto__', 'constructor', 'prototype'].includes(key)) throw new Error('Invalid preset key');
-      result[key] = merge(result[key], value);
-    }
-    return result;
-  }
-  return validateSettings(merge(settings, preset));
+  return validateSettings(mergeSettings(settings, preset));
 }
 
-export async function applyPreset(name: string): Promise<Settings> {
-  return saveSettings(mergePreset(loadSettings(), getPreset(name)));
+export async function applyPreset(name: string, agent?: Agent): Promise<Configuration> {
+  const config = loadSettings(); const preset = getPreset(name);
+  if (agent) return saveSettings({...config, agents: {...config.agents, [agent]: mergeSettings(config.agents?.[agent] ?? {}, preset)}});
+  return saveSettings(mergePreset(config, preset));
 }

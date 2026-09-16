@@ -217,6 +217,10 @@ test('presence config hot reloads assets and preserves the last valid configurat
   await configure('unset', 'presence.name');
   status = await request({type: 'status'}, path);
   assert.equal(status.activity.name, 'Coding with Codex');
+  assert.match(status.activity.assets.large_image, /\/codex\.png$/);
+  assert.equal(status.activity.assets.large_text, 'Codex');
+  await configure('set', 'presence.assets', 'null');
+  status = await request({type: 'status'}, path);
   assert.equal(status.activity.assets, undefined);
   assert.equal(status.settingsError, null);
 });

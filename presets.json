@@ -3,7 +3,7 @@
     "customPrompt": ""
   },
   "minimal": {
-    "customPrompt": "Use a calm, minimalist English style. Keep the topic to 3\u20135 words. Omit the subtitle unless it adds a concrete, useful distinction. Avoid jargon and emoji."
+    "customPrompt": "Use a calm, minimalist English style. Keep the topic to 3–5 words. Omit the subtitle unless it adds a concrete, useful distinction. Avoid jargon and emoji."
   },
   "playful": {
     "customPrompt": "Write in English with a relaxed tone and a little programmer humor, while staying understandable to people unfamiliar with the project. You may use one fitting emoji. Keep the actual work stage clear and do not exaggerate results."
@@ -11,8 +11,40 @@
   "codex": {
     "presence": {
       "assets": {
-        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@latest/dark/codex.png",
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/codex.png",
         "large_text": "Codex"
+      }
+    }
+  },
+  "claude-code": {
+    "presence": {
+      "assets": {
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/claudecode-color.png",
+        "large_text": "Claude Code"
+      }
+    }
+  },
+  "opencode": {
+    "presence": {
+      "assets": {
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/opencode.png",
+        "large_text": "OpenCode"
+      }
+    }
+  },
+  "pi": {
+    "presence": {
+      "assets": {
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/pi.png",
+        "large_text": "Pi"
+      }
+    }
+  },
+  "deepseek-harness": {
+    "presence": {
+      "assets": {
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/deepseek-color.png",
+        "large_text": "DeepSeek Harness"
       }
     }
   }

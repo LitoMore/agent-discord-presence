@@ -7,7 +7,10 @@ import {DiscordClient, activityFor, type Activity} from './discord.js';
 import {sessionKey} from './protocol.js';
 import {DISCORD_CLIENT_ID} from './constants.js';
 import {SummaryGeneration, generateSummary, type Generate} from './generation.js';
-import {loadSettings} from './settings.js';
+import {loadSettings, resolveSettings} from './settings.js';
+import {buildPresencePrompt} from './prompts.js';
+import {boundedResponse} from './completion.js';
+import {nativeSummarySettings, type NativeSummaryJob} from './native-summary.js';
 export interface Transport {status: string; readonly acknowledged?: boolean; start(): void; setActivity(activity: Activity | null): void; stop(): void}
 export async function startDaemon(options: {clientId?: string; dryRun?: boolean; path?: string; staleMs?: number;
   transport?: Transport; log?: (message: string) => void; generate?: Generate; generationTimeoutMs?: number} = {}) {
@@ -31,7 +34,15 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
   let settings = loadSettings();
   let settingsError: string | null = null;
   function reloadSettings() {
-    try { settings = loadSettings(); settingsError = null; }
+    try {
+      const next = loadSettings();
+      for (const session of store.sessions.values()) {
+        const {presence: _beforePresence, ...before} = resolveSettings(settings, session.agent);
+        const {presence: _afterPresence, ...after} = resolveSettings(next, session.agent);
+        if (JSON.stringify(before) !== JSON.stringify(after)) session.generationRevision++;
+      }
+      settings = next; settingsError = null;
+    }
     catch { settingsError = 'Invalid settings file; keeping the last valid configuration'; }
   }
   const store = new SessionStore(options.staleMs);
@@ -43,11 +54,15 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
   } : new DiscordClient(clientId, undefined, undefined, log));
   const sockets = new Set<Socket>();
   const generation = new SummaryGeneration(store, options.generate ?? (async (agent, response, signal, context) => {
-    const settings = loadSettings();
+    const settings = resolveSettings(loadSettings(), agent);
     if (!settings.enabled) throw new Error('Summary generation disabled');
     return generateSummary(settings, agent, response, signal, context);
-  }), () => transport.setActivity(activityFor(store.select(), settings.presence)), options.generationTimeoutMs);
-  function refresh() { reloadSettings(); store.sweep(); generation.reconcile(); transport.setActivity(activityFor(store.select(), settings.presence)); }
+  }), () => transport.setActivity(currentActivity()), options.generationTimeoutMs);
+  function currentActivity() {
+    const session = store.select();
+    return activityFor(session, resolveSettings(settings, session?.agent).presence);
+  }
+  function refresh() { reloadSettings(); store.sweep(); generation.reconcile(); transport.setActivity(currentActivity()); }
   const server = createServer(socket => {
     socket.setEncoding('utf8');
     sockets.add(socket); socket.on('close', () => sockets.delete(socket));
@@ -68,22 +83,44 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
           return;
         }
         store.sweep();
-        if (message.type === 'event') store.update(message.event);
+        if (message.type === 'native-summary') {
+          reloadSettings();
+          const job = message.job as NativeSummaryJob;
+          const session = store.sessions.get(job.key);
+          const effective = resolveSettings(settings, session?.agent);
+          if (!effective.enabled || effective.service !== 'session' || nativeSummarySettings(effective) !== job.settings ||
+              !session || session.agent !== 'deepseek-harness' || session.state !== 'idle' || session.generationRevision !== job.revision) throw new Error('Native summary is stale');
+          store.setSummary(job.key, message.summary, job.updatedAt, job.startedAt);
+        }
+        else if (message.type === 'event') store.update(message.event);
         else if (message.type === 'summary') store.setSummary(message.key, message.summary, message.expectedUpdatedAt, message.expectedStartedAt);
         else if (message.type === 'pin') store.pin(message.key);
         else if (message.type !== 'status') throw new Error('Unknown request type');
         refresh();
-        if (message.type === 'event' && message.event.response && (options.generate || (!options.dryRun && loadSettings().enabled))) {
+        let nativeSummary: NativeSummaryJob | undefined;
+        if (message.type === 'event' && message.event.response) {
           const key = sessionKey(message.event);
-          if (store.sessions.get(key)?.updatedAt === message.event.updatedAt) generation.submit(key, message.event.response);
+          const session = store.sessions.get(key);
+          const effective = resolveSettings(settings, session?.agent);
+          if (session && session.updatedAt === message.event.updatedAt && (options.generate || (!options.dryRun && effective.enabled))) {
+            if (message.nativeSummary === true && session.agent === 'deepseek-harness' && effective.service === 'session' && !options.generate) {
+              if (session.state === 'idle' && !message.event.heartbeat && effective.enabled) nativeSummary = {
+                key, updatedAt: session.updatedAt, startedAt: session.startedAt, revision: session.generationRevision,
+                model: effective.model || session.model || '', provider: effective.provider || session.provider || '',
+                settings: nativeSummarySettings(effective),
+                input: buildPresencePrompt({agent: session.agent, response: boundedResponse(message.event.response)}, effective),
+              };
+            } else generation.submit(key, message.event.response);
+          }
         }
         socket.end(JSON.stringify(message.type === 'status' ? {
           ok: true, discord: transport.status, activityAcknowledged: transport.acknowledged ?? null, pinned: store.pinned,
-          pid: process.pid, activity: activityFor(store.select(), settings.presence), selected: store.select() ? sessionKey(store.select()!) : null,
-          settingsError, presence: settings.presence,
+          pid: process.pid, activity: currentActivity(), selected: store.select() ? sessionKey(store.select()!) : null,
+          settingsError, presence: resolveSettings(settings, store.select()?.agent).presence,
+          agentSettings: Object.fromEntries([...new Set([...store.sessions.values()].map(s => s.agent))].map(agent => [agent, resolveSettings(settings, agent)])),
           generation: {...generation.status, ...settings, modelPolicy: 'override-or-session'},
           sessions: [...store.sessions.values()].map(s => ({key: sessionKey(s), state: s.state, model: s.model, provider: s.provider, startedAt: s.startedAt, updatedAt: s.updatedAt, lastSeen: s.lastSeen, summary: s.summary})),
-        } : {ok: true}) + '\n');
+        } : {ok: true, nativeSummary}) + '\n');
       } catch (error) { socket.end(JSON.stringify({ok: false, error: (error as Error).message}) + '\n'); }
     });
   });

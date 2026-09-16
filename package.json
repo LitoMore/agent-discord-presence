@@ -2,7 +2,7 @@
   "name": "agent-discord-presence",
   "version": "0.0.1",
   "author": "LitoMore",
-  "description": "Shared Discord Rich Presence for Codex, Claude Code, OpenCode, and Pi",
+  "description": "Shared Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -17,7 +17,8 @@
     "./opencode": "./dist/adapters/opencode.js",
     "./pi": "./dist/adapters/pi.js",
     "./prompts": "./dist/prompts.js",
-    "./presets": "./dist/presets.js"
+    "./presets": "./dist/presets.js",
+    "./deepseek-harness": "./dist/adapters/deepseek-harness.js"
   },
   "files": [
     "dist",
@@ -42,5 +43,10 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.9.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./plugins/deepseek-harness/cordis.patch.yml"
+    }
   }
 }

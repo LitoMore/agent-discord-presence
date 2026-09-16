@@ -1,6 +1,6 @@
 # Agent Discord Presence
 
-Discord Rich Presence for Codex, Claude Code, OpenCode, and Pi, powered by one local service that keeps your active work visible in Discord.
+Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness, powered by one local service that keeps your active work visible in Discord.
 
 ### Features
 
@@ -9,7 +9,7 @@ Discord Rich Presence for Codex, Claude Code, OpenCode, and Pi, powered by one l
 - Uses the current agent model by default for summaries, with optional custom model, service, language, and prompt styling.
 - Sends up to 4,000 characters of the completed assistant reply to the summarization model and includes model usage metadata.
 - Allows automatic summaries to be disabled while keeping lifecycle updates enabled.
-- DeepSeek Harness support is planned; its adapter is not implemented yet.
+- Runs multiple agents together with [independent model, prompt, and display settings](USAGE.md#independent-configuration-for-each-agent).
 
 ## Quick start
 
@@ -26,6 +26,7 @@ To release the terminal after startup, use `adp start -b`. Then connect your age
 - [Claude Code](USAGE.md#claude-code)
 - [OpenCode](USAGE.md#opencode)
 - [Pi](USAGE.md#pi)
+- [DeepSeek Harness](USAGE.md#deepseek-harness)
 
 A default Discord Application ID is included; no bot token is needed. Automatic startup is not configured.
 

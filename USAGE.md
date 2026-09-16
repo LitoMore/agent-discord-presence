@@ -62,6 +62,56 @@ This cancels pending summary generation, clears Discord activity, and closes the
 
 Ctrl+C in a foreground service terminal also closes it and clears its activity. Startup defaults to the foreground; use `--background` or `-b` to detach it. Background mode does not configure startup at OS login or restart after a crash. A service started with an older version must be restarted once to support the new stop command.
 
+## Independent configuration for each agent
+
+One daemon accepts Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness sessions concurrently. Install each client's hook/plugin once; incoming events automatically select that agent's settings. Discord shows one selected session at a time, using the existing activity priority and pinning rules.
+
+Configuration consists of built-in agent icon defaults, shared settings, and optional `agents` overrides, in that precedence order. Existing flat configuration remains valid. Use `--agent` to change just one client:
+
+```sh
+adp config set service session --agent codex
+adp config set model '' --agent codex
+adp config set customPrompt 'Write summaries in English.' --agent codex
+adp preset apply codex --agent codex
+
+adp config set service session --agent deepseek-harness
+adp config set model '' --agent deepseek-harness
+adp config set provider '' --agent deepseek-harness
+adp config set customPrompt '用中文描述当前工作。' --agent deepseek-harness
+```
+
+With `service: session` and empty model/provider overrides, each client uses its own session model. Harness also reuses its in-process provider credentials. You can independently configure `enabled`, `service`, `model`, `provider`, `baseUrl`, `apiKeyEnv`, `customPrompt`, `maxLength`, and all `presence` fields. `enabled` controls automatic summaries, not lifecycle reporting.
+
+Inspect effective settings or remove an override:
+
+```sh
+adp config show --agent codex
+adp config show --agent deepseek-harness
+adp config unset customPrompt --agent codex
+```
+
+`unset --agent` restores inheritance from the global setting. Setting an empty model explicitly selects the session model even if a global model override exists. Without `--agent`, commands continue to change shared defaults. Nested objects such as `presence.assets` merge; arrays and explicit `null` replace inherited values. Saved overrides contain only fields you set, so future global changes still reach inherited fields.
+
+For example, one configuration file can contain:
+
+```json
+{
+  "service": "session",
+  "agents": {
+    "codex": {
+      "customPrompt": "Write summaries in English.",
+      "presence": {"name": "Codex: {topic}"}
+    },
+    "deepseek-harness": {
+      "customPrompt": "用中文描述当前工作。",
+      "presence": {"name": "DeepSeek: {topic}"}
+    }
+  }
+}
+```
+
+Settings reload automatically. After upgrading the daemon code, restart it once. `adp status` includes effective `agentSettings` for connected agents. Summary-policy changes discard obsolete work for affected agents; changing only another agent's overrides leaves their work intact.
+
 ## Configuration presets
 
 Presets in [`presets.json`](presets.json) can contain any supported settings: prompt preferences, model/service selection, summary enablement, and `presence` fields such as images, buttons, text, and timers. Each preset is a partial settings object:
@@ -73,7 +123,7 @@ Presets in [`presets.json`](presets.json) can contain any supported settings: pr
     "maxLength": 60,
     "presence": {
       "assets": {
-        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@latest/dark/codex.png",
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/codex.png",
         "large_text": "Codex"
       }
     }
@@ -84,13 +134,13 @@ Presets in [`presets.json`](presets.json) can contain any supported settings: pr
 ```sh
 adp preset list
 adp preset show codex
-adp preset apply codex
+adp preset apply codex --agent codex
 adp preset apply minimal
 ```
 
 `show` previews without writing. `apply` validates and saves the merged settings to the same user config as `config set`. Nested objects merge, omitted fields remain unchanged, and arrays or `null` replace the existing value. For example, applying `codex` preserves an existing small image and model override. Invalid presets leave the config untouched. To clear images, use `"presence": {"assets": null}`; to clear buttons, use `"presence": {"buttons": []}`. Applying `default` resets only `customPrompt`, not all settings.
 
-The bundled presets are `default`, `minimal`, `playful`, and `codex`. To add bundled presets when developing from source, edit `presets.json`; the file is included in the npm package. For persistent personal settings, use `adp config set`. Existing string-valued prompt presets must be converted to objects such as `{"customPrompt": "..."}`. `adp prompt NAME` still previews only the prompt-related fields, without applying the preset. Saved presentation settings update in the running service without a restart; model settings affect new summary jobs.
+The bundled presets are `default`, `minimal`, `playful`, `codex`, `claude-code`, `opencode`, `pi`, and `deepseek-harness`. Each agent automatically gets its matching preset’s large image and hover label. These image defaults sit below explicit global settings and per-agent overrides; preset prompt/model fields are not applied automatically. Use `adp preset apply deepseek-harness --agent deepseek-harness` to explicitly save an agent’s image preset. Icon assets come from [Lobe Icons](https://github.com/lobehub/lobe-icons), pinned to version 1.97.0. To add bundled presets when developing from source, edit `presets.json`; the file is included in the npm package. For persistent personal settings, use `adp config set`. Existing string-valued prompt presets must be converted to objects such as `{"customPrompt": "..."}`. `adp prompt NAME` still previews only the prompt-related fields, without applying the preset. Saved presentation settings update in the running service without a restart; model settings affect new summary jobs.
 
 ## Default presence prompts
 
@@ -130,7 +180,7 @@ The action-phrase/subtitle approach and custom-style behavior were inspired by [
 
 ### Automatic generation and model selection
 
-Default behavior is `service: "session"` with an empty `model` override. The worker reuses the installed agent CLI and passes the model ID reported by the current session. It does not silently substitute a model if that ID is missing; `adp status` reports the error and the previous summary remains visible. An explicit `model` overrides the session model.
+Default behavior is `service: "session"` with an empty `model` override. The worker reuses the installed agent CLI, or the in-process Harness LLM service, with the model ID reported by the current session. It does not silently substitute a model if that ID is missing; the previous summary remains visible. CLI worker failures appear in `adp status`; Harness auxiliary failures are contained in the plugin. An explicit `model` overrides the session model.
 
 | Agent | Reply source and trigger | Native generation |
 | --- | --- | --- |
@@ -138,8 +188,9 @@ Default behavior is `service: "session"` with an empty `model` override. The wor
 | Claude Code | `Stop.last_assistant_message`; model retained from hook input | `claude -p --safe-mode`, no tools or persisted session |
 | Pi | Assistant text blocks, submitted at `agent_settled`; model/provider from context | `pi --print`, no tools/extensions/skills or saved session |
 | OpenCode | Assistant message text parts, submitted at idle; model/provider from message metadata | `opencode run`, all tool permissions denied; summary runs appear in OpenCode session history |
+| DeepSeek Harness | Completed assistant text, submitted at actual idle; model/provider from message source | In-process `ctx.llm.stream`, reusing Harness provider credentials; no tools or conversation history |
 
-The native CLI must be available to the service and already authenticated. Current CLI flags are required; in particular Claude Code must support `--safe-mode`. Model definitions or credentials available only inside an agent's project may not be available in the worker's temporary working directory. Codex workers skip the user config to avoid inheriting unrelated MCP integrations; custom Codex model-provider definitions should use the explicit API service below. This follows the session model ID, not its reasoning effort or the entire original conversation.
+For CLI-based adapters, the native CLI must be available to the service and already authenticated. Current CLI flags are required; in particular Claude Code must support `--safe-mode`. Model definitions or credentials available only inside an agent's project may not be available in the worker's temporary working directory. Codex workers skip the user config to avoid inheriting unrelated MCP integrations; custom Codex model-provider definitions should use the explicit API service below. This follows the session model ID, not its reasoning effort or the entire original conversation.
 
 Codex native generation has been verified live using the current session's `gpt-6-astra` model. Claude Code, Pi, and OpenCode native process invocation still need live verification on those clients; their event-to-generation paths are covered by integration tests.
 
@@ -328,6 +379,27 @@ Save the printed export statement in `~/.pi/agent/extensions/agent-presence.ts`.
 
 Pi must provide `agent_settled`, `ui_prompt_start`, and `ui_prompt_end` events. Older Pi versions that only emit `agent_end` are not supported: that event may precede automatic retry, compaction, or queued continuation, and would report idle too early.
 
+
+### DeepSeek Harness
+
+The package is a Harness bundle containing a Cordis plugin. Build a local checkout before installing it:
+
+```sh
+npm run build
+dsh plugin --profile web add /absolute/path/to/agent-discord-presence
+adp start -b
+```
+
+Restart Harness using that profile. Once this package version is published, use `dsh plugin --profile web add agent-discord-presence` instead. Replace `web` with your own profile name. Remove it with `dsh plugin --profile web remove agent-discord-presence`.
+
+The plugin tracks live `agent/status` transitions, approval audit events, errors, and agent disposal. It waits for actual idle before submitting completed assistant text, ignores reasoning and tool output, and closes all reporters on plugin unload. Concurrent sessions have independent state. Approval requests display Waiting; other interactive tools remain Working.
+
+Automatic summaries use the default `session` service: the plugin calls Harness’s registered LLM service with the current reply’s model and provider, reusing Harness’s configured credentials. No separate API key, endpoint, or OpenAI-compatible configuration is needed. Calls contain only the bounded completed reply and presence prompt, with no tools or conversation history. Explicit `model`/`provider` overrides still apply; selecting `openai-compatible` delegates generation to the daemon’s configured service instead.
+
+Native summaries run one at a time per plugin instance with a bounded queue and a 60-second deadline. New work, errors, agent disposal, and plugin unload cancel obsolete work. The daemon rejects results after session changes, manual summary edits, or summary configuration changes. Disabling automatic summaries preserves lifecycle presence. Native calls do not contribute to the daemon CLI worker counters.
+
+The adapter contract was checked against official Harness commit `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`; lifecycle integration tests use a simulated host and local daemon, not a live Harness/Discord connection. See the [official bundle installation contract](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/docs/user/develop/basic/publish.md).
+
 ## Session selection and lifecycle
 
 ```sh
@@ -338,7 +410,7 @@ adp unpin
 
 Copy an exact session key from `status`. Working/waiting sessions rank above errors, then idle sessions. Within a rank, the most recently updated session wins. Heartbeats do not change that ordering. Elapsed time measures the observed session lifetime, including idle time, rather than billable agent execution time.
 
-OpenCode and Pi adapters send a heartbeat every 20 seconds with their host PID. The service removes their sessions after 90 seconds without a heartbeat or when that process exits. OpenCode disposal and Pi shutdown stop their timers. A daemon restart recovers extension sessions on the next heartbeat.
+OpenCode, Pi, and DeepSeek Harness adapters send a heartbeat every 20 seconds with their host PID. The service removes their sessions after 90 seconds without a heartbeat or when that process exits. OpenCode disposal, Pi shutdown, and Harness plugin unload stop their timers. A daemon restart recovers extension sessions on the next heartbeat.
 
 Command hooks are short-lived and do not provide a trustworthy host PID, so Codex and Claude Code use lifecycle end events plus a 30-minute silence timeout. Change it with `start --stale-minutes 60`. A long silent model request can exceed that timeout; increase it for long-running work. Hooks resume reporting on the next lifecycle event after a daemon restart. Focus changes are not tracked.
 
@@ -394,11 +466,11 @@ src/
   daemon.ts         Shared service
   discord.ts        Discord IPC framing and connection state
   cli.ts            Foreground service, status, config and hooks
-  adapters/         Codex/Claude hooks, OpenCode plugin, Pi extension
+  adapters/         Codex/Claude hooks, OpenCode/Harness plugins, Pi extension
 plugins/            Distributable Codex and Claude Code plugin wrappers
 ```
 
-Future adapters should emit protocol-v1 state events through `emit` or `Reporter`; they should not own a Discord connection. DeepSeek Harness integration can be added here once its Cordis lifecycle contract is pinned.
+Future adapters should emit protocol-v1 state events through `emit` or `Reporter`; they should not own a Discord connection.
 
 Official API references reviewed on 2026-09-15:
 

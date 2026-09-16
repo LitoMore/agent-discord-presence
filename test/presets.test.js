@@ -5,7 +5,26 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {getPreset, mergePreset, PRESETS} from '../dist/presets.js';
-import {validateSettings} from '../dist/settings.js';
+import {validateSettings, resolveSettings} from '../dist/settings.js';
+import {agents, labels} from '../dist/protocol.js';
+
+test('agent icons are automatic fallbacks and explicit image settings win', () => {
+  const config = validateSettings({});
+  const images = new Set();
+  for (const agent of agents) {
+    const effective = resolveSettings(config, agent);
+    assert.deepEqual(effective.presence.assets, getPreset(agent).presence.assets);
+    assert.equal(effective.presence.assets.large_text, labels[agent]);
+    images.add(effective.presence.assets.large_image);
+  }
+  assert.equal(images.size, agents.length);
+  assert.deepEqual(config.presence, {});
+  assert.equal(resolveSettings(validateSettings({presence: {assets: {large_image: 'global'}}}), 'pi').presence.assets.large_image, 'global');
+  const scoped = validateSettings({presence: {assets: {large_image: 'global', small_image: 'badge'}}, agents: {pi: {presence: {assets: {large_image: 'custom'}}}}});
+  assert.deepEqual(resolveSettings(scoped, 'pi').presence.assets, {large_image: 'custom', large_text: 'Pi', small_image: 'badge'});
+  assert.equal(resolveSettings(validateSettings({presence: {assets: null}}), 'codex').presence.assets, null);
+  assert.equal(resolveSettings(validateSettings({agents: {pi: {presence: {assets: null}}}}), 'pi').presence.assets, null);
+});
 
 test('presets merge nested settings, replace arrays/null, and reject invalid input', () => {
   const original = validateSettings({model: 'custom-model', presence: {

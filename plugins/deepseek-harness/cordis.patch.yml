@@ -1,0 +1,3 @@
+- insert:
+    - id: agent-discord-presence
+      name: agent-discord-presence/deepseek-harness

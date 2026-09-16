@@ -3,6 +3,7 @@ import {parseArgs} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {startDaemon} from './daemon.js';
 import {request, summaryTarget, publishSummary} from './client.js';
+import {agents, type Agent} from './protocol.js';
 import {hookConfig, runHook} from './adapters/hooks.js';
 const help = `agent-discord-presence
 
@@ -26,7 +27,7 @@ const help = `agent-discord-presence
   config set KEY VALUE     Save summary, model, or presence settings
   config unset KEY         Restore a setting to its default
 
-Options: --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
+Options: --agent NAME (config show/set/unset, preset apply), --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
 Environment: DISCORD_CLIENT_ID, AGENT_PRESENCE_SOCKET, DISCORD_IPC_PATH, ADP_CONFIG
 `;
 async function main() {
@@ -34,8 +35,11 @@ async function main() {
     'client-id': {type: 'string'}, 'dry-run': {type: 'boolean'}, socket: {type: 'string'},
     'stale-minutes': {type: 'string'}, help: {type: 'boolean', short: 'h'},
     background: {type: 'boolean', short: 'b'},
+    agent: {type: 'string'},
   }});
   const [command, argument] = positionals;
+  const agent = values.agent as Agent | undefined;
+  if (agent !== undefined && (!agents.includes(agent) || !((command === 'config' && ['show', 'set', 'unset'].includes(argument)) || (command === 'preset' && argument === 'apply')))) throw new Error('Use --agent with config show/set/unset or preset apply and a supported agent name');
   if (values.socket) process.env.AGENT_PRESENCE_SOCKET = values.socket;
   if (!command || values.help) { console.log(help); return; }
   if (values.background && command !== 'start') throw new Error('--background is only available for start');
@@ -49,7 +53,7 @@ async function main() {
     const {PRESETS, getPreset, applyPreset} = await import('./presets.js');
     if (argument === 'list') console.log(JSON.stringify(Object.keys(PRESETS), null, 2));
     else if ((argument === 'show' || argument === 'apply') && positionals[2]) {
-      console.log(JSON.stringify(argument === 'show' ? getPreset(positionals[2]) : await applyPreset(positionals[2]), null, 2));
+      console.log(JSON.stringify(argument === 'show' ? getPreset(positionals[2]) : await applyPreset(positionals[2], agent), null, 2));
     } else throw new Error('Use preset list, preset show NAME, or preset apply NAME');
     return;
   }
@@ -70,7 +74,7 @@ async function main() {
   }
   if (command === 'config') {
     if (argument === 'show' || argument === 'set' || argument === 'unset') {
-      const {loadSettings, saveSetting, settingsPath} = await import('./settings.js');
+      const {loadSettings, resolveSettings, saveSetting, settingsPath} = await import('./settings.js');
       if (argument === 'set' || argument === 'unset') {
         const [key, raw] = positionals.slice(2);
         if (!key || (argument === 'set' && raw === undefined)) throw new Error('Use config set KEY VALUE');
@@ -81,9 +85,10 @@ async function main() {
           else if (['presence.details', 'presence.state'].includes(key) && raw === 'null') value = null;
           else if (key === 'enabled') value = raw === 'true' ? true : raw === 'false' ? false : raw;
         }
-        await saveSetting(key, value, argument === 'unset');
+        await saveSetting(key, value, argument === 'unset', agent);
       }
-      console.log(JSON.stringify({path: settingsPath(), ...loadSettings()}, null, 2));
+      const config = loadSettings();
+      console.log(JSON.stringify({path: settingsPath(), ...(agent ? {agent, ...resolveSettings(config, agent), overrides: config.agents?.[agent] ?? {}} : config)}, null, 2));
       return;
     }
     if (argument === 'codex' || argument === 'claude-code') {
