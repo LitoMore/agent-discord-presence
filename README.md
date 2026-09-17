@@ -2,6 +2,9 @@
 
 Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness, powered by one local service that keeps your active work visible in Discord.
 
+> [!NOTE]\
+> This project is in early development, so expect frequent changes.
+
 ### Features
 
 - Generates a summary title, subtitle, activity state, and elapsed session time for your active agent work.
