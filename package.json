@@ -3,6 +3,7 @@
   "version": "0.0.2",
   "author": "LitoMore",
   "description": "Shared Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness",
+  "repository": "https://github.com/LitoMore/agent-discord-presence",
   "type": "module",
   "license": "MIT",
   "engines": {
