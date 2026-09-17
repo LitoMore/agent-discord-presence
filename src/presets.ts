@@ -1,4 +1,4 @@
-import {loadSettings, saveSettings, validateSettings, mergeSettings, type Configuration} from './settings.js';
+import {loadSettings, saveSettings, validateSettings, mergeSettings, resolvePresets, type Configuration} from './settings.js';
 import type {Agent} from './protocol.js';
 import {PRESETS, type Preset} from './preset-data.js';
 export {PRESETS, type Preset};
@@ -16,8 +16,16 @@ export function mergePreset(settings: Configuration, preset: unknown): Configura
   return validateSettings(mergeSettings(settings, preset));
 }
 
-export async function applyPreset(name: string, agent?: Agent): Promise<Configuration> {
-  const config = loadSettings(); const preset = getPreset(name);
-  if (agent) return saveSettings({...config, agents: {...config.agents, [agent]: mergeSettings(config.agents?.[agent] ?? {}, preset)}});
-  return saveSettings(mergePreset(config, preset));
+/** Preview a composition without materializing default settings. */
+export function getPresets(names: string[]): Preset {
+  return resolvePresets(names);
+}
+
+/** Replace the selected presets while preserving explicit user settings. */
+export async function applyPreset(names: string | string[], agent?: Agent): Promise<Configuration> {
+  const presets = typeof names === 'string' ? [names] : names;
+  getPresets(presets);
+  const config = loadSettings();
+  if (agent) return saveSettings({...config, agents: {...config.agents, [agent]: {...config.agents?.[agent], presets}}});
+  return saveSettings({...config, presets});
 }

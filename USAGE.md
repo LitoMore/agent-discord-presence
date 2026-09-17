@@ -66,7 +66,7 @@ Ctrl+C in a foreground service terminal also closes it and clears its activity. 
 
 One daemon accepts Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness sessions concurrently. Install each client's hook/plugin once; incoming events automatically select that agent's settings. Discord shows one selected session at a time, using the existing activity priority and pinning rules.
 
-Configuration consists of built-in agent icon defaults, shared settings, and optional `agents` overrides, in that precedence order. Existing flat configuration remains valid. Use `--agent` to change just one client:
+Configuration resolves built-in defaults, shared presets, per-agent presets, explicit shared settings, and explicit `agents` overrides, in that precedence order. Existing flat configuration remains valid. Use `--agent` to change just one client:
 
 ```sh
 adp config set service session --agent codex
@@ -133,14 +133,32 @@ Presets in [`presets.json`](presets.json) can contain any supported settings: pr
 
 ```sh
 adp preset list
-adp preset show codex
-adp preset apply codex --agent codex
-adp preset apply minimal
+adp preset show codex minimal
+adp preset apply codex minimal --agent codex
+adp preset apply minimal playful
+adp config set presets '["codex","minimal"]'
+adp config unset presets --agent codex
 ```
 
-`show` previews without writing. `apply` validates and saves the merged settings to the same user config as `config set`. Nested objects merge, omitted fields remain unchanged, and arrays or `null` replace the existing value. For example, applying `codex` preserves an existing small image and model override. Invalid presets leave the config untouched. To clear images, use `"presence": {"assets": null}`; to clear buttons, use `"presence": {"buttons": []}`. Applying `default` resets only `customPrompt`, not all settings.
+`show` previews the combined preset fields without writing. `apply` writes directly to the configuration file and saves an ordered `presets` list, replacing the previous selection for that scope; no manual or agent edit is needed. It confirms the saved scope and file path on stderr and prints the saved configuration as JSON on stdout. Presets are applied left to right: later presets override earlier ones. For example, `codex minimal` combines the Codex image with the Minimal writing style; `minimal playful` uses the Playful style.
 
-The bundled presets are `default`, `minimal`, `playful`, `codex`, `claude-code`, `opencode`, `pi`, and `deepseek-harness`. Each agent automatically gets its matching preset’s large image and hover label. These image defaults sit below explicit global settings and per-agent overrides; preset prompt/model fields are not applied automatically. Use `adp preset apply deepseek-harness --agent deepseek-harness` to explicitly save an agent’s image preset. Icon assets come from [Lobe Icons](https://github.com/lobehub/lobe-icons), pinned to version 1.97.0. To add bundled presets when developing from source, edit `presets.json`; the file is included in the npm package. For persistent personal settings, use `adp config set`. Existing string-valued prompt presets must be converted to objects such as `{"customPrompt": "..."}`. `adp prompt NAME` still previews only the prompt-related fields, without applying the preset. Saved presentation settings update in the running service without a restart; model settings affect new summary jobs.
+Configuration stores selections separately from manual settings:
+
+```json
+{
+  "presets": ["codex", "minimal"],
+  "presence": {"assets": {"small_image": "my-badge"}},
+  "agents": {"pi": {"presets": ["pi", "playful"]}}
+}
+```
+
+Precedence, from lowest to highest: built-in defaults (including each agent's icon), global presets in order, agent presets in order, explicit global settings, explicit agent settings. Manual fields always win over presets, even when presets are selected afterward. Nested objects merge, omitted fields inherit, and arrays or `null` replace the inherited value. For example, `"presence": {"assets": null}` clears images and `"presence": {"buttons": []}` clears buttons.
+
+Use `config unset KEY` (optionally with `--agent`) to remove a manual override and reveal the preset value. Use `config unset presets` or `config set presets '[]'` to clear that scope's selection; clearing an agent's selection still inherits global presets. Invalid selections leave the config untouched. The `default` preset supplies an empty `customPrompt`; it does not reset other settings or remove manual overrides.
+
+Existing configuration fields remain explicit overrides. Values written by older versions of `preset apply` also remain explicit because their origin was not recorded; unset any such fields you want the new preset selection to control.
+
+The bundled presets are `default`, `minimal`, `playful`, `codex`, `claude-code`, `opencode`, `pi`, and `deepseek-harness`. Each agent automatically gets its matching preset’s large image and hover label. These image defaults sit below explicit global settings and per-agent overrides; preset prompt/model fields are not applied automatically. Use `adp preset apply deepseek-harness --agent deepseek-harness` to select an agent’s image preset. Icon assets come from [Lobe Icons](https://github.com/lobehub/lobe-icons), pinned to version 1.97.0. To add bundled presets when developing from source, edit `presets.json`; the file is included in the npm package. For persistent personal settings, use `adp config set`. Existing string-valued prompt presets must be converted to objects such as `{"customPrompt": "..."}`. `adp prompt NAME` still previews only the prompt-related fields, without applying the preset. Saved presentation settings update in the running service without a restart; model settings affect new summary jobs.
 
 ## Default presence prompts
 

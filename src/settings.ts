@@ -9,7 +9,8 @@ import {agents, type Agent} from './protocol.js';
 import {PRESETS} from './preset-data.js';
 export interface Settings {enabled: boolean; customPrompt: string; maxLength: number; model: string;
   service: 'session' | 'openai-compatible'; provider: string; baseUrl: string; apiKeyEnv: string; presence: PresenceOverrides}
-export interface Configuration extends Settings {agents?: Partial<Record<Agent, Partial<Settings>>>}
+export interface SettingsLayer extends Partial<Settings> {presets?: string[]}
+export interface Configuration extends SettingsLayer {agents?: Partial<Record<Agent, SettingsLayer>>}
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({enabled: true, ...DEFAULT_PROMPT_CONFIG,
   service: 'session', model: '', provider: '', baseUrl: '', apiKeyEnv: 'OPENAI_API_KEY', presence: {}});
 export function settingsPath(): string {
@@ -41,29 +42,56 @@ export function mergeSettings(base: unknown, patch: unknown): unknown {
   }
   return result;
 }
+/** Resolve only explicitly selected preset fields, in order. */
+export function resolvePresets(names: unknown): Partial<Settings> {
+  if (!Array.isArray(names) || names.some(name => typeof name !== 'string' || !Object.hasOwn(PRESETS, name))) {
+    throw new Error(`Expected a presets array containing: ${Object.keys(PRESETS).join(', ')}`);
+  }
+  let result: Partial<Settings> = {};
+  for (const name of names) {
+    const preset = PRESETS[name];
+    validateBase(preset);
+    result = mergeSettings(result, preset) as Partial<Settings>;
+  }
+  validateBase(result);
+  return result;
+}
+function validateLayer(value: unknown): SettingsLayer {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected settings object');
+  const {presets, ...explicit} = value as Record<string, unknown>;
+  validateBase(explicit);
+  if (presets !== undefined) resolvePresets(presets);
+  return structuredClone(value) as SettingsLayer;
+}
 export function validateSettings(value: unknown): Configuration {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected settings object');
   const {agents: overrides, ...base} = value as Record<string, unknown>;
-  const settings: Configuration = validateBase(base);
+  const settings: Configuration = validateLayer(base);
   if (overrides !== undefined) {
     if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) throw new Error('Invalid agent settings');
     settings.agents = {};
     for (const [agent, patch] of Object.entries(overrides)) {
-      if (!agents.includes(agent as Agent) || !patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('Invalid agent settings');
-      validateBase(mergeSettings(base, patch));
-      settings.agents[agent as Agent] = structuredClone(patch);
+      if (!agents.includes(agent as Agent)) throw new Error('Invalid agent settings');
+      settings.agents[agent as Agent] = validateLayer(patch);
     }
   }
+  resolveSettings(settings);
+  for (const agent of agents) resolveSettings(settings, agent);
   return settings;
 }
 export function resolveSettings(config: Configuration, agent?: Agent): Settings {
-  const {agents: overrides, ...base} = config;
+  const {agents: overrides, presets = [], ...base} = config;
+  const {presets: agentPresets = [], ...explicit} = agent ? overrides?.[agent] ?? {} : {};
   const defaults = agent ? {presence: {assets: PRESETS[agent]?.presence?.assets ?? {}}} : {};
-  return validateBase(mergeSettings(mergeSettings(defaults, base), agent ? overrides?.[agent] ?? {} : {}));
+  let result: unknown = defaults;
+  for (const layer of [resolvePresets(presets), resolvePresets(agentPresets), base, explicit]) {
+    result = mergeSettings(result, layer);
+  }
+  return validateBase(result);
 }
 export function loadSettings(): Configuration {
   const path = settingsPath();
-  if (!existsSync(path)) return {...DEFAULT_SETTINGS};
+  if (!existsSync(path)) return {};
   const data = readFileSync(path);
   if (data.length > 131_072) throw new Error('Settings file too large');
   return validateSettings(JSON.parse(data.toString()));

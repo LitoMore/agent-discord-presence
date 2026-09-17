@@ -4,7 +4,7 @@ import {createServer} from 'node:http';
 import {setTimeout as delay} from 'node:timers/promises';
 import {SessionStore} from '../dist/store.js';
 import {SummaryGeneration, generateSummary} from '../dist/generation.js';
-import {DEFAULT_SETTINGS, validateSettings} from '../dist/settings.js';
+import {DEFAULT_SETTINGS, validateSettings, resolveSettings} from '../dist/settings.js';
 import {assistantText} from '../dist/completion.js';
 import {hookEvent} from '../dist/adapters/hooks.js';
 const event = (state, updatedAt) => ({version: 1, agent: 'codex', sessionId: 's', state, updatedAt, model: 'current-model'});
@@ -76,7 +76,7 @@ test('completion extraction excludes reasoning and tools; Stop uses assistant ou
   assert.equal(hookEvent('codex', {session_id: 's', hook_event_name: 'StopFailure', last_assistant_message: 'error'}, 1000).response, undefined);
 });
 test('settings keep secrets out of config and validate service URLs', () => {
-  assert.equal(validateSettings({}).service, 'session');
+  assert.equal(resolveSettings(validateSettings({})).service, 'session');
   assert.throws(() => validateSettings({apiKey: 'secret'}));
   assert.throws(() => validateSettings({baseUrl: 'http://example.com/v1'}));
   assert.throws(() => validateSettings({baseUrl: 'https://user:password@example.com/v1'}));

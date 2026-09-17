@@ -19,8 +19,8 @@ const help = `agent-discord-presence
   hook codex|claude-code    Receive a lifecycle hook on stdin
   prompt [PRESET]           Print the default prompt, preferences, and output schema
   preset list              List available configuration presets
-  preset show NAME         Preview a preset without changing settings
-  preset apply NAME        Merge a preset into saved settings
+  preset show NAME...      Preview presets; later names take precedence
+  preset apply NAME...     Save ordered presets to config; explicit settings win
   summary KEY TOPIC [SUBTITLE]  Set public summary text for an existing session
   clear-summary KEY        Restore the session's default title
   config show              Show summary and presence settings
@@ -50,11 +50,18 @@ async function main() {
     return;
   }
   if (command === 'preset') {
-    const {PRESETS, getPreset, applyPreset} = await import('./presets.js');
+    const {PRESETS, getPresets, applyPreset} = await import('./presets.js');
     if (argument === 'list') console.log(JSON.stringify(Object.keys(PRESETS), null, 2));
     else if ((argument === 'show' || argument === 'apply') && positionals[2]) {
-      console.log(JSON.stringify(argument === 'show' ? getPreset(positionals[2]) : await applyPreset(positionals[2], agent), null, 2));
-    } else throw new Error('Use preset list, preset show NAME, or preset apply NAME');
+      const names = positionals.slice(2);
+      if (argument === 'show') console.log(JSON.stringify(getPresets(names), null, 2));
+      else {
+        const config = await applyPreset(names, agent);
+        const {settingsPath} = await import('./settings.js');
+        console.error(`Saved presets ${names.join(', ')} (${agent ?? 'global'}) to ${settingsPath()}`);
+        console.log(JSON.stringify(config, null, 2));
+      }
+    } else throw new Error('Use preset list, preset show NAME..., or preset apply NAME...');
     return;
   }
   if (command === 'prompt') {
@@ -80,7 +87,7 @@ async function main() {
         if (!key || (argument === 'set' && raw === undefined)) throw new Error('Use config set KEY VALUE');
         let value: unknown = raw;
         if (argument === 'set') {
-          if (['presence', 'presence.assets', 'presence.timestamps', 'presence.party', 'presence.buttons', 'presence.party.size'].includes(key)) value = JSON.parse(raw);
+          if (['presets', 'presence', 'presence.assets', 'presence.timestamps', 'presence.party', 'presence.buttons', 'presence.party.size'].includes(key)) value = JSON.parse(raw);
           else if (['presence.type', 'presence.status_display_type', 'presence.timestamps.end', 'maxLength'].includes(key) || (key === 'presence.timestamps.start' && raw !== 'session')) value = Number(raw);
           else if (['presence.details', 'presence.state'].includes(key) && raw === 'null') value = null;
           else if (key === 'enabled') value = raw === 'true' ? true : raw === 'false' ? false : raw;
@@ -88,7 +95,7 @@ async function main() {
         await saveSetting(key, value, argument === 'unset', agent);
       }
       const config = loadSettings();
-      console.log(JSON.stringify({path: settingsPath(), ...(agent ? {agent, ...resolveSettings(config, agent), overrides: config.agents?.[agent] ?? {}} : config)}, null, 2));
+      console.log(JSON.stringify({path: settingsPath(), ...(agent ? {agent, ...resolveSettings(config, agent), overrides: config.agents?.[agent] ?? {}} : {...config, ...resolveSettings(config)})}, null, 2));
       return;
     }
     if (argument === 'codex' || argument === 'claude-code') {

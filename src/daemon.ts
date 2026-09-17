@@ -118,7 +118,7 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
           pid: process.pid, activity: currentActivity(), selected: store.select() ? sessionKey(store.select()!) : null,
           settingsError, presence: resolveSettings(settings, store.select()?.agent).presence,
           agentSettings: Object.fromEntries([...new Set([...store.sessions.values()].map(s => s.agent))].map(agent => [agent, resolveSettings(settings, agent)])),
-          generation: {...generation.status, ...settings, modelPolicy: 'override-or-session'},
+          generation: {...generation.status, ...settings, ...resolveSettings(settings), modelPolicy: 'override-or-session'},
           sessions: [...store.sessions.values()].map(s => ({key: sessionKey(s), state: s.state, model: s.model, provider: s.provider, startedAt: s.startedAt, updatedAt: s.updatedAt, lastSeen: s.lastSeen, summary: s.summary})),
         } : {ok: true, nativeSummary}) + '\n');
       } catch (error) { socket.end(JSON.stringify({ok: false, error: (error as Error).message}) + '\n'); }
