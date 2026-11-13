@@ -1,0 +1,436 @@
+<div id="adp-prototype">
+  <div class="viz-carousel" aria-label="Presence desktop designs" data-previous-label="Previous design" data-next-label="Next design">
+    <section data-variant="Main window" aria-label="Presence main window">
+      <div class="ap-window" aria-label="Presence desktop app">
+        <header class="ap-titlebar">
+          <div class="ap-traffic" aria-hidden="true"><b></b><b></b><b></b></div>
+          <span>Agent Discord Presence</span>
+          <span class="ap-prototype">Interactive prototype · Sample data</span>
+        </header>
+        <div class="ap-shell">
+          <aside class="ap-sidebar">
+            <div class="ap-brand"><span class="ap-brandmark"><i data-lucide="radio" aria-hidden="true"></i></span><span>Presence<small>YOUR WORK, VISIBLE.</small></span></div>
+            <button type="button" data-page="settings" class="ap-mobile-settings cursor-interaction" aria-label="Preferences"><i data-lucide="settings-2" aria-hidden="true"></i></button>
+            <nav class="ap-nav" aria-label="Main navigation">
+              <button type="button" data-page="overview" class="cursor-interaction" aria-current="page"><i data-lucide="activity" aria-hidden="true"></i><span>Overview</span><span class="ap-count">3</span></button>
+              <button type="button" data-page="agents" class="cursor-interaction"><i data-lucide="blocks" aria-hidden="true"></i><span>Agents</span></button>
+              <button type="button" data-page="appearance" class="cursor-interaction"><i data-lucide="palette" aria-hidden="true"></i><span>Appearance</span></button>
+              <button type="button" data-page="summary" class="cursor-interaction"><i data-lucide="sparkles" aria-hidden="true"></i><span>Summaries</span></button>
+            </nav>
+            <div class="ap-sidebar-bottom">
+              <div class="ap-service"><span class="ap-dot"></span><span data-service-label>Local service running</span></div>
+              <button type="button" data-page="settings" class="ap-settings cursor-interaction"><i data-lucide="settings-2" aria-hidden="true"></i>Preferences<span class="ap-version">v0.0.3</span></button>
+            </div>
+          </aside>
+          <main class="ap-main">
+            <div class="ap-heading">
+              <div><div class="ap-eyebrow">YOUR WORK, VISIBLE.</div><h1 data-heading>Overview</h1><p data-description>Your agents at work, at a glance.</p></div>
+              <button type="button" data-power class="ap-button cursor-interaction"><i data-lucide="square" aria-hidden="true"></i><span>Stop service</span></button>
+            </div>
+            <div class="ap-workspace">
+              <div class="ap-content">
+                <section data-panel="overview" aria-label="Overview">
+                  <div class="ap-section-heading"><h2>Active sessions <span class="ap-inline-count">3</span></h2><span class="ap-small">Current sessions only</span></div>
+                  <div class="ap-selection"><i data-lucide="shuffle" aria-hidden="true"></i><div><strong data-selection-label>Automatic selection</strong><small data-selection-description>Shows the most recently active working session</small></div><button type="button" data-auto class="ap-text-button cursor-interaction" hidden>Use automatic</button><span data-auto-badge class="ap-tag">Enabled</span></div>
+                  <div class="ap-sessions" aria-label="Select a session to display"></div>
+                  <div class="ap-empty" data-empty hidden><i data-lucide="power" aria-hidden="true"></i><h3>Service stopped</h3><p>Start the service to see your agent sessions here.</p></div>
+                  <div class="ap-hint"><i data-lucide="pin" aria-hidden="true"></i><span>Click a session to pin it to your Discord activity.</span></div>
+                  <div class="ap-recent">
+                    <div class="ap-section-heading"><h2>Recent events</h2><span class="ap-small">This run</span></div>
+                    <div class="ap-event"><span class="ap-event-dot"></span><div data-last-event>Codex started working</div><time data-event-time>Just now</time></div>
+                    <div class="ap-event"><span class="ap-event-dot ap-event-muted"></span><div>Connected to Discord</div><time>12m ago</time></div>
+                    <div class="ap-event"><span class="ap-event-dot ap-event-muted"></span><div>Local service started</div><time>12m ago</time></div>
+                  </div>
+                </section>
+                <section data-panel="agents" aria-label="Agents" hidden>
+                  <div class="ap-section-heading"><h2>Your agents</h2><span class="ap-small">3 / 5 Connected</span></div>
+                  <div class="ap-agent-list"></div>
+                  <div class="ap-note"><i data-lucide="layers" aria-hidden="true"></i><div><strong>One service. Individual settings.</strong><p>Agents inherit global settings. Override the summary model or appearance for each agent.</p></div></div>
+                </section>
+                <section data-panel="appearance" aria-label="Appearance" hidden>
+                  <div class="ap-section-heading"><h2>Display</h2><span class="ap-tag">Global settings</span></div>
+                  <label class="ap-field">Appearance preset<select data-preset><option value="agent">Follow agent</option><option value="minimal">Minimal text</option><option value="card">Developer card</option></select></label>
+                  <div class="ap-fields">
+                    <label class="ap-field">Activity name<input data-name value="{topic}" maxlength="128"><small>Use {topic} for the summary topic</small></label>
+                    <label class="ap-field">Details<input data-details value="{phase}" maxlength="128"></label>
+                    <label class="ap-field">Subtitle<input data-subtitle value="{subtitle}" maxlength="128"></label>
+                  </div>
+                  <label class="ap-toggle-row"><span><strong>Show elapsed time</strong><small>Count from the start of the session</small></span><input data-timer type="checkbox" role="switch" checked></label>
+                  <div class="ap-form-footer"><span class="ap-small">Preview updates immediately</span><button type="button" data-apply class="ap-button ap-primary cursor-interaction">Apply to prototype</button></div>
+                </section>
+                <section data-panel="summary" aria-label="Summaries" hidden>
+                  <div class="ap-section-heading"><h2>Automatic summaries</h2><span class="ap-tag">Global settings</span></div>
+                  <label class="ap-toggle-row ap-toggle-top"><span><strong>Generate summaries automatically</strong><small>Generate activity text from agent replies</small></span><input data-generation type="checkbox" role="switch" checked></label>
+                  <div data-generation-fields>
+                    <label class="ap-field">Model source<select data-model-source><option value="session">Follow the current agent session</option><option value="custom">Custom compatible service</option></select><small>Use the model and provider from the current session.</small></label>
+                    <div data-custom-model hidden>
+                      <label class="ap-field">Service URL<input data-base-url placeholder="https://api.example.com/v1" type="url"></label>
+                      <label class="ap-field">Model name<input data-model placeholder="Enter a model ID"></label>
+                      <label class="ap-field">API key environment variable<input data-key-env placeholder="OPENAI_API_KEY" value="OPENAI_API_KEY"><small>Enter the variable name. The local service reads its value.</small></label>
+                    </div>
+                    <div class="ap-field"><label for="ap-prompt">Custom prompt</label><textarea id="ap-prompt" data-prompt rows="3" placeholder="For example: Keep summaries concise, specific, and relaxed."></textarea></div>
+                    <label class="ap-field">Summary length <span data-length-label class="ap-range-value">72 characters</span><input data-length type="range" min="20" max="120" value="72"></label>
+                  </div>
+                  <div class="ap-form-footer"><span class="ap-small">Lifecycle updates remain enabled</span><button type="button" data-apply class="ap-button ap-primary cursor-interaction">Apply to prototype</button></div>
+                </section>
+                <section data-panel="settings" aria-label="Preferences" hidden>
+                  <div class="ap-section-heading"><h2>Appearance</h2></div>
+                  <label class="ap-field">Theme<select data-theme><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+                  <div class="ap-section-heading ap-spaced"><h2>Service & connections</h2></div>
+                  <div class="ap-info-row"><span>Local service</span><span data-settings-service>Running</span></div>
+                  <div class="ap-info-row"><span>Discord</span><span data-settings-discord>Connected</span></div>
+                  <div class="ap-info-row"><span>Transport</span><span>Local socket</span></div>
+                  <div class="ap-config-path"><span>Configuration file</span><code>~/.config/agent-discord-presence/config.json</code></div>
+                  <button type="button" data-diagnose class="ap-button cursor-interaction"><i data-lucide="stethoscope" aria-hidden="true"></i>Simulate connection check</button>
+                  <div class="ap-diagnostic" data-diagnostic role="status" hidden></div>
+                </section>
+              </div>
+              <aside class="ap-preview" aria-label="Discord activity preview">
+                <div class="ap-preview-heading"><span>DISCORD PREVIEW</span><span class="ap-preview-live"><span class="ap-dot"></span><span data-preview-status>Syncing</span></span></div>
+                <div class="ap-discord">
+                  <div class="ap-discord-top"><div class="ap-avatar">L<span></span></div><div class="ap-profile-menu" aria-hidden="true">···</div></div>
+                  <div class="ap-profile-name">LitoMore<span class="ap-profile-tag">Online</span></div><div class="ap-handle">litomore</div>
+                  <div class="ap-discord-rule"></div>
+                  <div class="ap-activity-kicker" data-discord-kicker>Playing</div>
+                  <div class="ap-activity" data-activity-body>
+                    <div class="ap-art" data-art><span data-art-glyph>⌘</span><span class="ap-art-status"><i data-lucide="code-2" aria-hidden="true"></i></span></div>
+                    <div class="ap-activity-text"><strong data-preview-title>Designing the desktop app</strong><span data-preview-details>Working</span><span data-preview-subtitle>Refining sessions and activity settings</span><span class="ap-elapsed" data-preview-timer>Elapsed 12:34</span></div>
+                  </div>
+                  <div class="ap-discord-paused" data-discord-paused hidden>No activity to display</div>
+                  <div class="ap-discord-button" data-discord-button hidden>View project</div>
+                </div>
+                <div class="ap-preview-caption"><i data-lucide="eye" aria-hidden="true"></i><span>A preview of what your friends see.</span></div>
+                <div class="ap-preview-context"><span>Now showing</span><strong data-current-agent>Codex</strong><span>Selection</span><strong data-current-mode>Automatic selection</strong><span>Summary model</span><strong data-current-model>Follow session</strong></div>
+                <div class="ap-local-note"><i data-lucide="monitor" aria-hidden="true"></i><span>Sample data · Changes stay in the prototype</span></div>
+              </aside>
+            </div>
+            <div class="ap-toast" role="status" aria-live="polite"></div>
+          </main>
+        </div>
+        <footer class="ap-statusbar"><span><span class="ap-dot"></span><span data-footer-status>Discord connected</span></span><span>One local service · All your agents</span></footer>
+      </div>
+    </section>
+    <section data-variant="Tray quick panel" aria-label="Presence Tray quick panel" hidden>
+      <div class="ap-tray-stage" aria-label="Presence tray design">
+        <div class="ap-desktop-bar"><span>Presence</span><span><i data-lucide="radio" aria-hidden="true"></i><i data-lucide="wifi" aria-hidden="true"></i><span>Fri 21:41</span></span></div>
+        <div class="ap-tray" aria-label="Presence Quick panel">
+          <div class="ap-tray-head"><span class="ap-tray-brand"><i data-lucide="radio" aria-hidden="true"></i>Presence</span><span class="ap-preview-live"><span class="ap-dot"></span><span data-tray-status>Showing</span></span></div>
+          <div class="ap-tray-presence"><div class="ap-art" data-tray-art>⌘</div><div><div class="ap-small" data-tray-agent>Codex</div><strong data-tray-title>Designing the desktop app</strong><span data-tray-detail>Working · 12:34</span></div></div>
+          <div class="ap-tray-section"><span>Activity source</span><button type="button" data-auto class="ap-text-button cursor-interaction">Automatic selection</button></div>
+          <div class="ap-tray-sessions"></div>
+          <div class="ap-tray-bottom"><span><span class="ap-dot"></span><span data-tray-connection>Discord connected</span></span><button type="button" data-power class="ap-button cursor-interaction">Stop service</button></div>
+          <div class="ap-tray-disclaimer">Interactive prototype · Sample data</div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<style>
+  #adp-prototype { --ap-bg:light-dark(#fff,#191b20); --ap-sidebar:light-dark(#f5f5f4,#202227); --ap-text:light-dark(#24272d,#edeef2); --ap-muted:light-dark(#74777f,#a2a5b0); --ap-line:light-dark(#e9e9e8,#33363d); --ap-soft:light-dark(#f7f7f6,#24272e); --ap-accent:#6261d7; --ap-accent-soft:light-dark(#eeedfb,#303047); --ap-good:light-dark(#2d816b,#73c5a9); --ap-warning:light-dark(#a36a29,#e2b172); --ap-radius:12px; font:400 13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; color:var(--ap-text); width:100%; }
+  #adp-prototype *,#adp-prototype *::before,#adp-prototype *::after { box-sizing:border-box; }
+  #adp-prototype [hidden] { display:none !important; }
+  #adp-prototype button,#adp-prototype input,#adp-prototype select,#adp-prototype textarea { font:inherit; }
+  #adp-prototype button { color:inherit; }
+  #adp-prototype button:disabled { opacity:.55; cursor:default; }
+  #adp-prototype svg { width:16px;height:16px;flex-shrink:0;stroke-width:1.65; }
+  #adp-prototype h1,#adp-prototype h2,#adp-prototype h3,#adp-prototype p { margin:0; }
+  #adp-prototype h1 { font-size:24px;line-height:1.4;letter-spacing:-.7px;font-weight:500; }
+  #adp-prototype h2,#adp-prototype h3 { font-size:13px;font-weight:500; }
+  #adp-prototype strong { font-weight:500; }
+  #adp-prototype .ap-window { border:1px solid var(--ap-line);border-radius:var(--ap-radius);background:var(--ap-bg);overflow:hidden;min-height:750px; }
+  #adp-prototype .ap-titlebar { display:flex;align-items:center;justify-content:space-between;gap:12px;height:45px;padding:0 18px;border-bottom:1px solid var(--ap-line);background:var(--ap-soft);font-size:11px;color:var(--ap-muted); }
+  #adp-prototype .ap-traffic { display:flex;gap:7px;min-width:62px; }
+  #adp-prototype .ap-traffic b { width:10px;height:10px;background:light-dark(#dededc,#464951);border-radius:50%; }
+  #adp-prototype .ap-prototype { font-size:11px;padding-right:80px; }
+  #adp-prototype .ap-shell { display:grid;grid-template-columns:180px minmax(0,1fr);min-height:674px; }
+  #adp-prototype .ap-sidebar { background:var(--ap-sidebar);padding:25px 12px 14px;display:flex;flex-direction:column;border-right:1px solid var(--ap-line);min-width:0;position:relative; }
+  #adp-prototype .ap-mobile-settings { display:none;position:absolute;top:10px;right:16px;border:0;border-radius:6px;background:transparent;padding:8px;align-items:center;justify-content:center; }
+  #adp-prototype .ap-brand { display:flex;align-items:center;gap:10px;padding:0 8px 30px;font-size:18px;letter-spacing:-.5px;font-weight:500; }
+  #adp-prototype .ap-brandmark { width:33px;height:33px;border-radius:10px;background:var(--ap-accent);color:#fff;display:grid;place-items:center; }
+  #adp-prototype .ap-brandmark svg { width:22px;height:22px; }
+  #adp-prototype .ap-brand small { display:block;font-size:11px;letter-spacing:1px;color:var(--ap-muted);font-weight:400;margin-top:2px; }
+  #adp-prototype .ap-nav { display:grid;gap:5px; }
+  #adp-prototype .ap-nav button,#adp-prototype .ap-settings { border:0;background:transparent;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:7px;text-align:left;width:100%;font-size:12px; }
+  #adp-prototype .ap-nav button { color:var(--ap-muted); }
+  #adp-prototype .ap-nav button:hover,#adp-prototype .ap-settings:hover { background:var(--ap-line); }
+  #adp-prototype .ap-nav button[aria-current="page"] { background:var(--ap-accent-soft);color:light-dark(#514eb3,#c1bfff);font-weight:500; }
+  #adp-prototype .ap-count { margin-left:auto;font-size:11px; }
+  #adp-prototype .ap-sidebar-bottom { margin-top:auto;padding-top:36px; }
+  #adp-prototype .ap-service { font-size:11px;display:flex;gap:7px;align-items:center;color:var(--ap-muted);padding:12px; }
+  #adp-prototype .ap-dot { display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--ap-good);flex-shrink:0; }
+  #adp-prototype .ap-settings { padding:10px 9px;font-size:11px;color:var(--ap-muted);gap:7px; }
+  #adp-prototype .ap-version { font-size:11px;margin-left:auto; }
+  #adp-prototype .ap-main { min-width:0;padding:30px 26px 18px;position:relative; }
+  #adp-prototype .ap-heading { display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:30px; }
+  #adp-prototype .ap-eyebrow { color:var(--ap-muted);font-size:11px;letter-spacing:1.7px;margin-bottom:7px; }
+  #adp-prototype .ap-heading p { color:var(--ap-muted);font-size:11px;margin-top:8px; }
+  #adp-prototype .ap-button { border:1px solid var(--ap-line);border-radius:6px;background:var(--ap-bg);padding:7px 11px;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;font-size:11px; }
+  #adp-prototype .ap-button svg { width:13px;height:13px; }
+  #adp-prototype .ap-button:hover { background:var(--ap-soft); }
+  #adp-prototype .ap-primary { background:var(--ap-accent);color:#fff;border-color:var(--ap-accent); }
+  #adp-prototype .ap-primary:hover { filter:brightness(.93);background:var(--ap-accent); }
+  #adp-prototype .ap-workspace { display:grid;grid-template-columns:minmax(0,1fr) 258px;gap:25px; }
+  #adp-prototype .ap-content { min-width:0; }
+  #adp-prototype .ap-section-heading { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px; }
+  #adp-prototype .ap-inline-count { font-size:11px;color:var(--ap-muted);margin-left:6px;font-weight:400; }
+  #adp-prototype .ap-small { font-size:11px;color:var(--ap-muted); }
+  #adp-prototype .ap-selection { background:var(--ap-soft);padding:13px 12px;display:flex;align-items:center;gap:9px;border:1px solid var(--ap-line);border-radius:8px;margin-bottom:13px; }
+  #adp-prototype .ap-selection>svg { color:var(--ap-muted);width:15px;height:15px; }
+  #adp-prototype .ap-selection strong { display:block;font-size:11px; }
+  #adp-prototype .ap-selection small { display:block;font-size:11px;color:var(--ap-muted);margin-top:2px; }
+  #adp-prototype .ap-tag { display:inline-block;font-size:11px;color:var(--ap-muted);background:var(--ap-soft);border:1px solid var(--ap-line);padding:2px 5px;border-radius:4px;white-space:nowrap; }
+  #adp-prototype .ap-selection .ap-tag,#adp-prototype .ap-selection .ap-text-button { margin-left:auto; }
+  #adp-prototype .ap-session { width:100%;display:flex;align-items:center;gap:11px;text-align:left;background:var(--ap-bg);border:1px solid var(--ap-line);border-radius:8px;padding:15px 12px;margin-bottom:9px; }
+  #adp-prototype .ap-session:hover { border-color:var(--ap-accent); }
+  #adp-prototype .ap-session[aria-pressed="true"] { border-color:var(--ap-accent);background:var(--ap-accent-soft); }
+  #adp-prototype .ap-agent-icon { display:grid;place-items:center;border:1px solid var(--ap-line);background:var(--ap-bg);border-radius:9px;width:35px;height:35px;font-size:22px;flex-shrink:0;color:var(--ap-text); }
+  #adp-prototype .ap-agent-icon.ap-claude { color:light-dark(#ad735b,#e2a28b); }
+  #adp-prototype .ap-agent-icon.ap-pi { font-family:Georgia,serif;font-size:25px; }
+  #adp-prototype .ap-session-copy { min-width:0;flex:1; }
+  #adp-prototype .ap-session-name { display:flex;align-items:center;justify-content:space-between;gap:5px;flex-wrap:wrap;font-size:12px; }
+  #adp-prototype .ap-session-name em { font-style:normal;font-size:11px;color:var(--ap-accent);display:inline-flex;gap:3px;align-items:center; }
+  #adp-prototype .ap-session-name em svg { width:10px;height:10px; }
+  #adp-prototype .ap-session-title { display:block;font-size:11px;margin-top:4px;overflow-wrap:anywhere; }
+  #adp-prototype .ap-session-meta { display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ap-muted);margin-top:7px;flex-wrap:wrap; }
+  #adp-prototype .ap-session-meta .ap-dot { width:5px;height:5px; }
+  #adp-prototype .ap-dot.ap-waiting { background:var(--ap-warning); }
+  #adp-prototype .ap-dot.ap-idle { background:var(--ap-muted); }
+  #adp-prototype .ap-hint { display:flex;align-items:flex-start;gap:6px;font-size:11px;color:var(--ap-muted);padding:7px 2px 0; }
+  #adp-prototype .ap-hint svg { width:12px;height:12px;margin-top:2px; }
+  #adp-prototype .ap-recent { margin-top:30px; }
+  #adp-prototype .ap-event { display:flex;align-items:center;gap:9px;min-height:33px;font-size:11px; }
+  #adp-prototype .ap-event-dot { width:5px;height:5px;flex-shrink:0;background:var(--ap-accent);border-radius:50%; }
+  #adp-prototype .ap-event-muted { background:var(--ap-line); }
+  #adp-prototype .ap-event time { margin-left:auto;color:var(--ap-muted);white-space:nowrap; }
+  #adp-prototype .ap-preview { border-left:1px solid var(--ap-line);padding-left:23px;min-width:0; }
+  #adp-prototype .ap-preview-heading { display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:11px;letter-spacing:1px;margin:2px 0 19px;color:var(--ap-muted); }
+  #adp-prototype .ap-preview-live { display:inline-flex;align-items:center;gap:5px;color:var(--ap-good);font-size:11px;letter-spacing:0;white-space:nowrap; }
+  #adp-prototype .ap-discord { padding:17px 15px 19px;border:1px solid light-dark(#dfdfe4,#393a43);background:light-dark(#f5f5f8,#27282e);border-radius:10px; }
+  #adp-prototype .ap-discord-top { display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px; }
+  #adp-prototype .ap-avatar { position:relative;width:43px;height:43px;display:grid;place-items:center;font:500 23px/1.3 Georgia,serif;color:#e9e3d9;background:#6d756b;border-radius:50%; }
+  #adp-prototype .ap-avatar>span { position:absolute;width:12px;height:12px;bottom:0;right:0;background:#44a27b;border:3px solid light-dark(#f5f5f8,#27282e);border-radius:50%; }
+  #adp-prototype .ap-profile-menu { color:var(--ap-muted);font-size:20px;line-height:1; }
+  #adp-prototype .ap-profile-name { display:flex;align-items:center;gap:7px;font-weight:500;font-size:15px; }
+  #adp-prototype .ap-profile-tag { font-size:11px;color:var(--ap-good);font-weight:400; }
+  #adp-prototype .ap-handle { font-size:11px;color:var(--ap-muted);margin-top:2px; }
+  #adp-prototype .ap-discord-rule { height:1px;background:var(--ap-line);margin:16px 0; }
+  #adp-prototype .ap-activity-kicker { font-size:11px;font-weight:500;margin-bottom:11px; }
+  #adp-prototype .ap-activity { display:flex;align-items:flex-start;gap:10px; }
+  #adp-prototype .ap-art { width:48px;height:48px;border-radius:10px;background:light-dark(#ecece8,#383b36);display:grid;place-items:center;position:relative;font-size:31px;flex-shrink:0;color:var(--ap-text); }
+  #adp-prototype .ap-art-status { width:18px;height:18px;position:absolute;bottom:-3px;right:-3px;border-radius:50%;border:2px solid light-dark(#f5f5f8,#27282e);background:var(--ap-accent);color:#fff;display:grid;place-items:center; }
+  #adp-prototype .ap-art-status svg { width:10px;height:10px; }
+  #adp-prototype .ap-activity-text { display:grid;gap:3px;min-width:0;font-size:11px;overflow-wrap:anywhere; }
+  #adp-prototype .ap-activity-text strong { font-size:11px; }
+  #adp-prototype .ap-elapsed { color:var(--ap-muted);font-variant-numeric:tabular-nums; }
+  #adp-prototype .ap-discord-paused { color:var(--ap-muted);font-size:11px;padding-bottom:12px; }
+  #adp-prototype .ap-discord-button { background:light-dark(#e5e5ec,#41424c);padding:6px;border-radius:4px;text-align:center;font-size:11px;margin-top:14px; }
+  #adp-prototype .ap-preview-caption { display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;color:var(--ap-muted);padding:13px 0 24px; }
+  #adp-prototype .ap-preview-caption svg { width:12px;height:12px; }
+  #adp-prototype .ap-preview-context { display:grid;grid-template-columns:1fr 1fr;gap:13px 7px;border-top:1px solid var(--ap-line);padding-top:20px;font-size:11px; }
+  #adp-prototype .ap-preview-context>span { color:var(--ap-muted); }
+  #adp-prototype .ap-preview-context>strong { text-align:right;overflow-wrap:anywhere; }
+  #adp-prototype .ap-local-note { margin-top:26px;display:flex;align-items:center;gap:6px;color:var(--ap-muted);font-size:11px; }
+  #adp-prototype .ap-local-note svg { width:13px;height:13px; }
+  #adp-prototype .ap-statusbar { display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ap-line);background:var(--ap-soft);padding:7px 16px;font-size:11px;color:var(--ap-muted); }
+  #adp-prototype .ap-statusbar>span:first-child { display:flex;align-items:center;gap:6px; }
+  #adp-prototype .ap-statusbar .ap-dot { width:5px;height:5px; }
+  #adp-prototype .ap-text-button { border:0;padding:3px 0;background:transparent;color:var(--ap-accent);font-size:11px;white-space:nowrap; }
+  #adp-prototype .ap-field { display:flex;flex-direction:column;gap:7px;font-size:11px;margin:0 0 17px; }
+  #adp-prototype .ap-field input:not([type="range"]),#adp-prototype .ap-field select,#adp-prototype .ap-field textarea { color:var(--ap-text);background:var(--ap-bg);border:1px solid var(--ap-line);border-radius:6px;padding:8px 9px;min-width:0;max-width:100%;width:100%;font-size:11px; }
+  #adp-prototype .ap-field textarea { resize:vertical;min-height:80px; }
+  #adp-prototype .ap-field small { color:var(--ap-muted);font-size:11px; }
+  #adp-prototype .ap-field input[type="range"] { width:100%;accent-color:var(--ap-accent); }
+  #adp-prototype .ap-range-value { color:var(--ap-muted);font-variant-numeric:tabular-nums; }
+  #adp-prototype .ap-toggle-row { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 0;border-top:1px solid var(--ap-line);font-size:11px; }
+  #adp-prototype .ap-toggle-row small { display:block;color:var(--ap-muted);font-size:11px;margin-top:3px; }
+  #adp-prototype .ap-toggle-row input { appearance:none;position:relative;background:light-dark(#cccdd2,#555864);width:29px;height:17px;border-radius:20px;flex-shrink:0;margin:0; }
+  #adp-prototype .ap-toggle-row input:checked { background:var(--ap-accent); }
+  #adp-prototype .ap-toggle-row input::after { content:"";position:absolute;top:3px;left:3px;width:11px;height:11px;border-radius:50%;background:#fff; }
+  #adp-prototype .ap-toggle-row input:checked::after { left:15px; }
+  #adp-prototype .ap-toggle-top { border-top:0;padding:0 0 22px; }
+  #adp-prototype .ap-form-footer { display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--ap-line);padding-top:17px;margin-top:12px; }
+  #adp-prototype .ap-toast { min-height:20px;color:var(--ap-good);font-size:11px;margin-top:16px; }
+  #adp-prototype .ap-agent-row { display:flex;gap:10px;padding:14px 0;border-bottom:1px solid var(--ap-line);align-items:center; }
+  #adp-prototype .ap-agent-copy { flex:1;min-width:0; }
+  #adp-prototype .ap-agent-copy strong { display:block;font-size:11px; }
+  #adp-prototype .ap-agent-copy small { display:block;font-size:11px;color:var(--ap-muted);margin-top:3px; }
+  #adp-prototype .ap-agent-row>span:last-child { font-size:11px;color:var(--ap-good);white-space:nowrap; }
+  #adp-prototype .ap-agent-row>span.ap-unconnected { color:var(--ap-muted); }
+  #adp-prototype .ap-note { display:flex;gap:8px;margin-top:22px;padding:13px;background:var(--ap-soft);border-radius:7px;font-size:11px; }
+  #adp-prototype .ap-note>svg { width:14px;height:14px;color:var(--ap-muted);margin-top:2px; }
+  #adp-prototype .ap-note p { color:var(--ap-muted);margin-top:4px; }
+  #adp-prototype .ap-spaced { margin-top:30px; }
+  #adp-prototype .ap-info-row { display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--ap-line);padding:12px 0;font-size:11px; }
+  #adp-prototype .ap-info-row>span:first-child { color:var(--ap-muted); }
+  #adp-prototype .ap-config-path { display:grid;gap:7px;margin:20px 0;color:var(--ap-muted);font-size:11px; }
+  #adp-prototype .ap-config-path code { font:11px/1.6 ui-monospace,monospace;overflow-wrap:anywhere;color:var(--ap-text); }
+  #adp-prototype .ap-diagnostic { font-size:11px;color:var(--ap-good);padding:12px 0; }
+  #adp-prototype .ap-empty { text-align:center;padding:50px 15px;background:var(--ap-soft);border-radius:8px; }
+  #adp-prototype .ap-empty>svg { width:24px;height:24px;color:var(--ap-muted);margin-bottom:12px; }
+  #adp-prototype .ap-empty p { font-size:11px;color:var(--ap-muted);margin-top:8px; }
+  #adp-prototype .ap-tray-stage { min-height:750px;border:1px solid var(--ap-line);border-radius:var(--ap-radius);overflow:hidden;background:light-dark(#efefed,#202227); }
+  #adp-prototype .ap-desktop-bar { background:var(--ap-bg);border-bottom:1px solid var(--ap-line);display:flex;align-items:center;justify-content:space-between;padding:9px 24px;font-size:11px; }
+  #adp-prototype .ap-desktop-bar>span:last-child { display:flex;align-items:center;gap:18px;margin-right:90px; }
+  #adp-prototype .ap-desktop-bar svg { width:14px;height:14px; }
+  #adp-prototype .ap-tray { margin:18px 104px 35px auto;background:var(--ap-bg);border:1px solid var(--ap-line);border-radius:12px;width:350px;padding:17px;box-shadow:0 12px 35px #0000000b; }
+  #adp-prototype .ap-tray-head { display:flex;justify-content:space-between;align-items:center;margin-bottom:23px; }
+  #adp-prototype .ap-tray-brand { display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500; }
+  #adp-prototype .ap-tray-brand svg { color:var(--ap-accent);width:19px;height:19px; }
+  #adp-prototype .ap-tray-presence { display:flex;align-items:center;gap:12px;padding-bottom:22px; }
+  #adp-prototype .ap-tray-presence strong { display:block;font-size:14px;margin:3px 0; }
+  #adp-prototype .ap-tray-presence>div:last-child>span { display:block;font-size:11px;color:var(--ap-muted); }
+  #adp-prototype .ap-tray-section { display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--ap-line);padding:14px 0 11px;font-size:11px; }
+  #adp-prototype .ap-tray-session { width:100%;display:flex;align-items:center;gap:10px;border:0;background:var(--ap-bg);padding:10px 9px;border-radius:7px;font-size:11px;text-align:left; }
+  #adp-prototype .ap-tray-session[aria-pressed="true"] { background:var(--ap-accent-soft); }
+  #adp-prototype .ap-tray-session .ap-agent-icon { width:28px;height:28px;font-size:19px;border-radius:7px; }
+  #adp-prototype .ap-tray-session>span:nth-child(2) { flex:1; }
+  #adp-prototype .ap-tray-session small { display:block;font-size:11px;color:var(--ap-muted); }
+  #adp-prototype .ap-tray-session>span:last-child { color:var(--ap-accent);font-size:12px; }
+  #adp-prototype .ap-tray-bottom { display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--ap-line);margin-top:14px;padding-top:14px; }
+  #adp-prototype .ap-tray-bottom>span { display:flex;gap:6px;align-items:center;font-size:11px;color:var(--ap-muted); }
+  #adp-prototype .ap-tray-disclaimer { text-align:center;margin-top:14px;color:var(--ap-muted);font-size:11px; }
+  #adp-prototype[data-density="compact"] .ap-session { padding-block:10px; }
+  #adp-prototype[data-density="compact"] .ap-main { padding-top:22px; }
+  @media(max-width:900px) { #adp-prototype .ap-shell { grid-template-columns:150px minmax(0,1fr); } #adp-prototype .ap-main { padding:24px 20px 16px; } #adp-prototype .ap-workspace { grid-template-columns:minmax(0,1fr) 225px;gap:18px; } #adp-prototype .ap-preview { padding-left:18px; } #adp-prototype .ap-brand { font-size:16px;padding-inline:4px;gap:7px; } #adp-prototype .ap-nav button { padding:10px 8px;gap:8px; } #adp-prototype .ap-selection { flex-wrap:wrap; } #adp-prototype .ap-selection small { font-size:11px; } #adp-prototype .ap-prototype { padding-right:80px; } }
+  @media(max-width:730px) { #adp-prototype .ap-shell { grid-template-columns:1fr; } #adp-prototype .ap-sidebar { padding:12px 16px;border-right:0;border-bottom:1px solid var(--ap-line); } #adp-prototype .ap-brand { padding:0 0 12px;font-size:16px; } #adp-prototype .ap-brand small,#adp-prototype .ap-sidebar-bottom { display:none; } #adp-prototype .ap-brandmark { width:27px;height:27px;border-radius:8px; } #adp-prototype .ap-brandmark svg { width:18px;height:18px; } #adp-prototype .ap-nav { display:flex;gap:4px;flex-wrap:wrap; } #adp-prototype .ap-nav button { width:auto;flex:1;white-space:nowrap;justify-content:center;padding:9px 6px;font-size:11px;gap:5px; } #adp-prototype .ap-nav button svg { width:13px;height:13px; } #adp-prototype .ap-count { display:none; } #adp-prototype .ap-main { padding:22px 18px 12px; } #adp-prototype .ap-heading { margin-bottom:23px; } #adp-prototype .ap-workspace { grid-template-columns:minmax(0,1fr) 225px;gap:17px; } #adp-prototype .ap-titlebar>span:nth-child(2) { display:none; } #adp-prototype .ap-prototype { padding-right:80px;font-size:11px; } #adp-prototype .ap-tray { margin-inline:auto; } #adp-prototype .ap-tray-stage,#adp-prototype .ap-window { min-height:900px; } }
+  @media(max-width:540px) { #adp-prototype .ap-workspace { grid-template-columns:1fr;gap:26px; } #adp-prototype .ap-preview { border-left:0;border-top:1px solid var(--ap-line);padding:20px 0 0; } #adp-prototype .ap-preview-heading { margin-bottom:14px; } #adp-prototype .ap-preview-context { margin-top:0; } #adp-prototype .ap-discord { max-width:100%; } #adp-prototype .ap-main { padding:22px 15px 12px; } #adp-prototype .ap-heading { align-items:flex-start; } #adp-prototype .ap-heading h1 { font-size:22px; } #adp-prototype .ap-heading p { max-width:185px;font-size:11px; } #adp-prototype .ap-heading .ap-button { margin-top:25px;padding:6px 8px;font-size:11px; } #adp-prototype .ap-nav button { flex:1 1 40%;justify-content:flex-start;padding-left:12px; } #adp-prototype .ap-prototype { padding-right:45px; } #adp-prototype .ap-titlebar { padding-inline:12px; } #adp-prototype .ap-statusbar>span:last-child { display:none; } #adp-prototype .ap-tray { width:calc(100% - 24px);max-width:350px; } #adp-prototype .ap-desktop-bar { padding-inline:15px; } #adp-prototype .ap-desktop-bar>span:last-child { margin-right:0;gap:12px; } #adp-prototype .ap-tray-stage { min-height:1250px; } #adp-prototype .ap-window { min-height:1250px; } }
+  @media(max-width:730px) { #adp-prototype .ap-mobile-settings { display:flex; } }
+  @media(pointer:coarse) { #adp-prototype button { min-height:44px; } #adp-prototype .ap-field input:not([type="range"]),#adp-prototype .ap-field textarea,#adp-prototype .ap-field select { font-size:16px; } #adp-prototype .ap-toggle-row { min-height:52px; } }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('adp-prototype');
+  const $ = s => root.querySelector(s);
+  const $$ = s => [...root.querySelectorAll(s)];
+  const sessions = [
+    {id:'codex',name:'Codex',glyph:'⌘',css:'',state:'Working',phase:'Working',topic:'Designing the desktop app',subtitle:'Refining sessions and activity settings',time:'12:34',age:'12 min',model:'Session model'},
+    {id:'claude-code',name:'Claude Code',glyph:'✳',css:'ap-claude',state:'Waiting for input',phase:'Waiting for input',topic:'Updating project docs',subtitle:'Reviewing the documentation structure',time:'08:16',age:'8 min',model:'Session model'},
+    {id:'pi',name:'Pi',glyph:'π',css:'ap-pi',state:'Idle',phase:'Ready for a prompt',topic:'Validating configuration',subtitle:'Ready for the next task',time:'04:52',age:'4 min',model:'Session model'}
+  ];
+  const defaults = {page:'overview',selected:'codex',pinned:false,running:true,preset:'agent',name:'{topic}',details:'{phase}',subtitle:'{subtitle}',timer:true,generation:true,source:'session',model:'',prompt:'',length:72,theme:'auto'};
+  const state = {...defaults};
+  const design = {radius:12,density:'comfortable',accent:'#6261d7'};
+  const pages = {overview:['Overview','Your agents at work, at a glance.'],agents:['Agents','Connect once. Keep your work in sync.'],appearance:['Appearance','Make every line feel like you.'],summary:['Summaries','Turn your work into a clear, concise activity.'],settings:['Preferences','Manage appearance and your local service.']};
+  const esc = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const current = () => sessions.find(s=>s.id===state.selected) || sessions[0];
+  function restore(snapshot) {
+    const saved = snapshot?.modelContent?.prototype;
+    if (saved && typeof saved==='object') {
+      for(const k of Object.keys(defaults)) if(typeof saved[k]===typeof defaults[k]) state[k]=saved[k];
+      if(!pages[state.page])state.page='overview';
+      if(!sessions.some(s=>s.id===state.selected))state.selected='codex';
+      if(!['auto','light','dark'].includes(state.theme))state.theme='auto';
+      state.length=Math.min(120,Math.max(20,state.length));
+    }
+  }
+  restore(window.openai?.widgetState);
+  function save() {
+    window.openai?.setWidgetState?.({modelContent:{prototype:{...state}},privateContent:null})?.catch(()=>{});
+  }
+  function icons() { if(globalThis.lucide) globalThis.lucide.createIcons({attrs:{width:16,height:16}}); }
+  function notify(text) { $('.ap-toast').textContent=text; }
+  function event(text) { $('[data-last-event]').textContent=text; $('[data-event-time]').textContent='Just now'; }
+  function fieldValue(selector,value) { const el=$(selector);if(el && el!==document.activeElement) el.value=value; }
+  function render() {
+    const s=current();
+    root.style.colorScheme=state.theme==='auto'?'light dark':state.theme;
+    root.style.setProperty('--ap-radius',design.radius+'px');
+    root.style.setProperty('--ap-accent',design.accent);
+    root.dataset.density=design.density;
+    $$('[data-panel]').forEach(el=>el.hidden=el.dataset.panel!==state.page);
+    $$('[data-page]').forEach(el=>{if(el.dataset.page===state.page)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
+    $('[data-heading]').textContent=pages[state.page][0];
+    $('[data-description]').textContent=pages[state.page][1];
+    $('.ap-sessions').hidden=!state.running;
+    $('[data-empty]').hidden=state.running;
+    $('.ap-selection').hidden=!state.running;
+    $('.ap-hint').hidden=!state.running;
+    $('.ap-count').textContent=state.running?'3':'0';
+    $('.ap-inline-count').textContent=state.running?'3':'0';
+    $('[data-selection-label]').textContent=state.pinned?'Pinned session':'Automatic selection';
+    $('[data-selection-description]').textContent=state.pinned?'Always show '+s.name+' until automatic selection resumes':'Shows the most recently active working session';
+    $('[data-auto-badge]').hidden=state.pinned;
+    $('.ap-selection [data-auto]').hidden=!state.pinned;
+    $('.ap-sessions').innerHTML=sessions.map((item,i)=>`<button type="button" class="ap-session cursor-interaction" data-session="${item.id}" aria-pressed="${state.selected===item.id}" aria-label="Pin ${item.name}：${item.topic}"><span class="ap-agent-icon ${item.css}">${item.glyph}</span><span class="ap-session-copy"><span class="ap-session-name"><strong>${item.name}</strong>${state.selected===item.id?`<em><i data-lucide="${state.pinned?'pin':'radio'}" aria-hidden="true"></i>${state.pinned?'Pinned':'Showing'}</em>`:''}</span><span class="ap-session-title">${item.topic}</span><span class="ap-session-meta"><span class="ap-dot ${i===1?'ap-waiting':i===2?'ap-idle':''}"></span>${item.state}<span>·</span>${item.age}</span></span></button>`).join('');
+    const raw = state.generation?s:{...s,topic:'Coding with '+s.name,subtitle:s.name+' session'};
+    const title = template(state.name,raw);
+    const details = template(state.details,raw);
+    const subtitle = template(state.subtitle,raw);
+    $('[data-preview-title]').textContent=title;
+    $('[data-preview-details]').textContent=details;
+    $('[data-preview-subtitle]').textContent=subtitle;
+    $('[data-preview-timer]').textContent='Elapsed '+s.time;
+    $('[data-preview-timer]').hidden=!state.timer;
+    $('[data-art-glyph]').textContent=s.glyph;
+    $('[data-art]').hidden=state.preset==='minimal';
+    $('[data-discord-button]').hidden=state.preset!=='card'||!state.running;
+    $('[data-activity-body]').hidden=!state.running;
+    $('[data-discord-paused]').hidden=state.running;
+    $('[data-discord-kicker]').textContent=state.running?'Playing':'Activity';
+    $('[data-preview-status]').textContent=state.running?'Syncing':'Not showing';
+    $('[data-current-agent]').textContent=state.running?s.name:'—';
+    $('[data-current-mode]').textContent=state.pinned?'Pinned':'Automatic selection';
+    $('[data-current-model]').textContent=!state.generation?'Automatic summaries disabled':state.source==='session'?'Follow session':state.model||'Custom model';
+    $$('[data-power]').forEach(el=>el.innerHTML=`<i data-lucide="${state.running?'square':'play'}" aria-hidden="true"></i><span>${state.running?'Stop service':'Start service'}</span>`);
+    $('[data-service-label]').textContent=state.running?'Local service running':'Local service stopped';
+    $('[data-footer-status]').textContent=state.running?'Discord connected':'Service stopped · Activity cleared';
+    $('[data-settings-service]').textContent=state.running?'Running':'Stopped';
+    $('[data-settings-discord]').textContent=state.running?'Connected':'Disconnected';
+    $$('[data-generation-fields] input,[data-generation-fields] select,[data-generation-fields] textarea').forEach(el=>el.disabled=!state.generation);
+    $('[data-custom-model]').hidden=state.source!=='custom';
+    $('[data-length-label]').textContent=state.length+' characters';
+    fieldValue('[data-name]',state.name);fieldValue('[data-details]',state.details);fieldValue('[data-subtitle]',state.subtitle);fieldValue('[data-preset]',state.preset);fieldValue('[data-model-source]',state.source);fieldValue('[data-model]',state.model);fieldValue('[data-prompt]',state.prompt);fieldValue('[data-length]',state.length);fieldValue('[data-theme]',state.theme);
+    $('[data-timer]').checked=state.timer;$('[data-generation]').checked=state.generation;
+    $('[data-tray-status]').textContent=state.running?'Showing':'Stopped';
+    $('[data-tray-agent]').textContent=s.name;
+    $('[data-tray-title]').textContent=state.running?title:'Activity cleared';
+    $('[data-tray-detail]').textContent=state.running?details+' · '+s.time:'Start the service to resume activity';
+    $('[data-tray-art]').textContent=s.glyph;
+    $('[data-tray-connection]').textContent=state.running?'Discord connected':'Service stopped';
+    $('.ap-tray-sessions').innerHTML=sessions.map(item=>`<button type="button" class="ap-tray-session cursor-interaction" data-session="${item.id}" aria-pressed="${state.selected===item.id&&state.running}" ${state.running?'':'disabled'}><span class="ap-agent-icon ${item.css}">${item.glyph}</span><span>${item.name}<small>${item.state}</small></span><span>${state.selected===item.id&&state.running?(state.pinned?'Pinned':'✓'):''}</span></button>`).join('');
+    $$('[data-service-label],[data-footer-status],[data-tray-connection],[data-preview-status],[data-tray-status]').forEach(el=>{const dot=el.parentElement.querySelector('.ap-dot');if(dot)dot.style.background=state.running?'var(--ap-good)':'var(--ap-muted)';});
+    icons();
+  }
+  function template(value,s) { return value.replace(/\{(topic|phase|subtitle|agent|state)\}/g,(_,key)=>({topic:s.topic,phase:s.phase,subtitle:s.subtitle,agent:s.name,state:s.state}[key])).slice(0,128); }
+  const otherAgents=[{name:'OpenCode',glyph:'>_',css:'',method:'Plugin integration'},{name:'DeepSeek Harness',glyph:'D',css:'',method:'Extension integration'}];
+  $('.ap-agent-list').innerHTML=[...sessions.map(s=>({...s,method:s.id==='pi'?'Extension ready':'Hooks ready',connected:true})),...otherAgents].map(a=>`<div class="ap-agent-row"><span class="ap-agent-icon ${a.css}">${a.glyph}</span><div class="ap-agent-copy"><strong>${a.name}</strong><small>${a.method}</small></div><span class="${a.connected?'':'ap-unconnected'}">${a.connected?'Connected':'Not connected'}</span></div>`).join('');
+  root.addEventListener('click',e=>{
+    const button=e.target.closest('button');if(!button)return;
+    if(button.dataset.page) { state.page=button.dataset.page;notify(''); }
+    else if(button.dataset.session&&state.running) { state.selected=button.dataset.session;state.pinned=true;event('Pinned '+current().name); }
+    else if(button.hasAttribute('data-auto')) { state.pinned=false;state.selected='codex';event('Resumed automatic selection'); }
+    else if(button.hasAttribute('data-power')) { state.running=!state.running;event(state.running?'Local service started':'Service stopped，Discord Activity cleared');notify(state.running?'Simulated service startup.':'Simulated service shutdown and activity clear.'); }
+    else if(button.hasAttribute('data-apply')) { notify('Applied to the prototype. Your configuration file is unchanged.'); }
+    else if(button.hasAttribute('data-diagnose')) { const d=$('[data-diagnostic]');d.hidden=false;d.textContent=state.running?'Simulated check: local service ready; Discord connected.':'Simulated check: start the local service first.'; }
+    else return;
+    render();save();
+  });
+  const inputs={'data-name':'name','data-details':'details','data-subtitle':'subtitle','data-model':'model','data-prompt':'prompt','data-length':'length'};
+  root.addEventListener('input',e=>{for(const [attr,key] of Object.entries(inputs))if(e.target.hasAttribute(attr)){state[key]=key==='length'?Number(e.target.value):e.target.value;render();save();return;}});
+  root.addEventListener('change',e=>{
+    const el=e.target;
+    if(el.hasAttribute('data-timer'))state.timer=el.checked;
+    else if(el.hasAttribute('data-generation'))state.generation=el.checked;
+    else if(el.hasAttribute('data-model-source'))state.source=el.value;
+    else if(el.hasAttribute('data-theme'))state.theme=el.value;
+    else if(el.hasAttribute('data-preset')) {
+      state.preset=el.value;
+      state.name=state.preset==='card'?'{agent} · {topic}':'{topic}';
+      state.details='{phase}';state.subtitle='{subtitle}';
+    } else return;
+    render();save();
+  });
+  window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState){restore(e.detail.globals.widgetState);render();}});
+  render();
+  if(globalThis.ResizeObserver) new ResizeObserver(entries=>{
+    const height=entries[0].target.getBoundingClientRect().height;
+    if(height>0) $('.ap-tray-stage').style.minHeight=height+'px';
+  }).observe($('.ap-window'));
+  if(globalThis.Tweak) {
+    const tweak=new Tweak({container:$('.ap-window'),onChange:render});
+    tweak.addSelect(design,'density',{label:'Density',options:[{label:'Comfortable',value:'comfortable'},{label:'Compact',value:'compact'}]});
+    tweak.addSlider(design,'radius',{label:'Window radius',min:0,max:20,unit:'px'});
+    tweak.addColorPicker(design,'accent',{label:'Accent color',reference:'--ap-accent'});
+  }
+})();
+</script>

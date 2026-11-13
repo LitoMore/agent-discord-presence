@@ -1,0 +1,8 @@
+{
+  "name": "Agent Discord Presence",
+  "slug": "agent-discord-presence",
+  "identifier": "com.litomore.agent-discord-presence",
+  "version": "0.0.3",
+  "out": "build",
+  "resources": ["../../dist", "../../prompts", "../../presets.json", "../../package.json", "../../README.md", "../../USAGE.md", "../../plugins"]
+}

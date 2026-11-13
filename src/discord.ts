@@ -2,6 +2,7 @@ import {createConnection, type Socket} from 'node:net';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import type {Activity} from './presentation.js';
+import type {DiscordProfile} from './desktop-protocol.js';
 export {activityFor, type Activity} from './presentation.js';
 export function frame(op: number, body: unknown): Buffer {
   const data = Buffer.from(JSON.stringify(body));
@@ -45,6 +46,7 @@ export class DiscordClient {
   private index = 0;
   private backoff = 1000;
   status = 'disconnected';
+  user: DiscordProfile | null = null;
   acknowledgedActivity: unknown = null;
   get acknowledged(): boolean { return this.ready && this.lastSent === JSON.stringify(this.desired); }
   constructor(readonly clientId: string, private readonly paths = discordPaths(), private readonly intervalMs = 5000,
@@ -70,6 +72,12 @@ export class DiscordClient {
           if (op === 2) { socket.destroy(); return; }
           if (op !== 1) continue;
           if (body.evt === 'READY') {
+            const user = (body.data as {user?: Record<string, unknown>} | undefined)?.user;
+            if (user && typeof user.id === 'string' && /^\d{1,20}$/.test(user.id) && typeof user.username === 'string') {
+              this.user = {id: user.id, username: user.username,
+                ...(typeof user.global_name === 'string' ? {globalName: user.global_name} : {}),
+                ...(typeof user.avatar === 'string' && /^[a-zA-Z0-9_]+$/.test(user.avatar) ? {avatar: user.avatar} : {})};
+            }
             clearTimeout(this.handshake); this.ready = true; this.status = 'connected';
             this.backoff = 1000; this.lastSent = undefined; this.lastWrite = 0;
             this.flush();

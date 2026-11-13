@@ -35,6 +35,10 @@
     ]
   },
   "scripts": {
+    "desktop": "npm run build && go -C apps/desktop tool mygo dev -sign -",
+    "desktop:install": "go -C apps/desktop mod download",
+    "desktop:build": "npm run build && go -C apps/desktop tool mygo build",
+    "desktop:check": "go -C apps/desktop vet ./...",
     "build": "tsc",
     "check": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.js",

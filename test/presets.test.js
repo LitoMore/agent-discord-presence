@@ -33,7 +33,7 @@ test('presets merge nested settings, replace arrays/null, and reject invalid inp
   const result = mergePreset(original, getPreset('codex'));
   assert.equal(result.model, 'custom-model');
   assert.equal(result.presence.assets.small_image, 'existing');
-  assert.match(result.presence.assets.large_image, /codex.png$/);
+  assert.match(result.presence.assets.large_image, /codex-color\.png$/);
   assert.equal(original.presence.assets.large_image, undefined);
   const cleared = mergePreset(result, {presence: {assets: null, buttons: []}});
   assert.equal(cleared.presence.assets, null);

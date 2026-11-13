@@ -11,7 +11,7 @@
   "codex": {
     "presence": {
       "assets": {
-        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/codex.png",
+        "large_image": "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-png@1.97.0/dark/codex-color.png",
         "large_text": "Codex"
       }
     }

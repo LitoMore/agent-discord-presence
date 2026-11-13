@@ -31,7 +31,7 @@ test('Discord handshake, activity ACK, ping, coalescing, reconnect replay, and c
         messages.push(packet);
         if (packet.op === 0) {
           assert.equal(packet.body.client_id, '1549160807705870418');
-          const ready = frame(1, {evt: 'READY'}); socket.write(ready.subarray(0, 3)); socket.write(ready.subarray(3));
+          const ready = frame(1, {evt: 'READY', data: {user: {id:'123456789012345678',username:'presence-test',global_name:'Presence Test',avatar:'test_avatar',email:'must-not-retain@example.com'}}}); socket.write(ready.subarray(0, 3)); socket.write(ready.subarray(3));
           socket.write(frame(3, {nonce: 'alive'}));
         }
         if (packet.body.cmd === 'SET_ACTIVITY') socket.write(frame(1, {cmd: 'SET_ACTIVITY', nonce: packet.body.nonce, data: null}));
@@ -44,6 +44,7 @@ test('Discord handshake, activity ACK, ping, coalescing, reconnect replay, and c
   const activity = {type: 0, name: 'Debugging a plugin', details: 'Coding with Pi', state: 'Working', timestamps: {start: 1000}};
   client.setActivity(activity); client.start();
   await until(() => messages.some(m => m.body.cmd === 'SET_ACTIVITY'));
+  assert.deepEqual(client.user,{id:'123456789012345678',username:'presence-test',globalName:'Presence Test',avatar:'test_avatar'});
   await until(() => messages.some(m => m.op === 4 && m.body.nonce === 'alive'));
   client.setActivity({...activity, state: 'Waiting'}); client.setActivity({...activity, state: 'Idle'});
   await until(() => messages.some(m => m.body.args?.activity?.state === 'Idle'));
@@ -217,7 +218,7 @@ test('presence config hot reloads assets and preserves the last valid configurat
   await configure('unset', 'presence.name');
   status = await request({type: 'status'}, path);
   assert.equal(status.activity.name, 'Coding with Codex');
-  assert.match(status.activity.assets.large_image, /\/codex\.png$/);
+  assert.match(status.activity.assets.large_image, /\/codex-color\.png$/);
   assert.equal(status.activity.assets.large_text, 'Codex');
   await configure('set', 'presence.assets', 'null');
   status = await request({type: 'status'}, path);

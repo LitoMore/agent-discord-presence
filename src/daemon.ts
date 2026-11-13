@@ -11,7 +11,8 @@ import {loadSettings, resolveSettings} from './settings.js';
 import {buildPresencePrompt} from './prompts.js';
 import {boundedResponse} from './completion.js';
 import {nativeSummarySettings, type NativeSummaryJob} from './native-summary.js';
-export interface Transport {status: string; readonly acknowledged?: boolean; start(): void; setActivity(activity: Activity | null): void; stop(): void}
+import type {DiscordProfile} from './desktop-protocol.js';
+export interface Transport {status: string; readonly acknowledged?: boolean; readonly user?: DiscordProfile | null; start(): void; setActivity(activity: Activity | null): void; stop(): void}
 export async function startDaemon(options: {clientId?: string; dryRun?: boolean; path?: string; staleMs?: number;
   transport?: Transport; log?: (message: string) => void; generate?: Generate; generationTimeoutMs?: number} = {}) {
   const path = options.path ?? socketPath();
@@ -114,12 +115,12 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
           }
         }
         socket.end(JSON.stringify(message.type === 'status' ? {
-          ok: true, discord: transport.status, activityAcknowledged: transport.acknowledged ?? null, pinned: store.pinned,
+          ok: true, discord: transport.status, profile: transport.user ?? null, activityAcknowledged: transport.acknowledged ?? null, pinned: store.pinned,
           pid: process.pid, activity: currentActivity(), selected: store.select() ? sessionKey(store.select()!) : null,
           settingsError, presence: resolveSettings(settings, store.select()?.agent).presence,
           agentSettings: Object.fromEntries([...new Set([...store.sessions.values()].map(s => s.agent))].map(agent => [agent, resolveSettings(settings, agent)])),
           generation: {...generation.status, ...settings, ...resolveSettings(settings), modelPolicy: 'override-or-session'},
-          sessions: [...store.sessions.values()].map(s => ({key: sessionKey(s), state: s.state, model: s.model, provider: s.provider, startedAt: s.startedAt, updatedAt: s.updatedAt, lastSeen: s.lastSeen, summary: s.summary})),
+          sessions: [...store.sessions.values()].map(s => ({key: sessionKey(s), agent: s.agent, state: s.state, model: s.model, provider: s.provider, startedAt: s.startedAt, updatedAt: s.updatedAt, lastSeen: s.lastSeen, summary: s.summary})),
         } : {ok: true, nativeSummary}) + '\n');
       } catch (error) { socket.end(JSON.stringify({ok: false, error: (error as Error).message}) + '\n'); }
     });
