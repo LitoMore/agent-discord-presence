@@ -5,7 +5,7 @@ import {startDaemon} from './daemon.js';
 import {request, summaryTarget, publishSummary} from './client.js';
 import {agents, type Agent} from './protocol.js';
 import {hookConfig, runHook} from './adapters/hooks.js';
-import {catalogFor, selectEvents} from './integration-events.js';
+import {catalogFor, selectEvents, scenariosFor} from './integration-events.js';
 import {eventFlags, runManagement} from './setup-cli.js';
 import {entryContent} from './integration-config.js';
 const help = `agent-discord-presence
@@ -23,6 +23,7 @@ const help = `agent-discord-presence
   uninstall AGENT --dry-run Preview removal without changing any files
   setup [AGENT]             Configure events (interactive by default)
   events AGENT              List supported events and dependencies
+  scenarios AGENT           List activity scenarios and their event combinations
   hook codex|claude-code    Receive a lifecycle hook on stdin
   prompt [PRESET]           Print the default prompt, preferences, and output schema
   preset list              List available configuration presets
@@ -35,6 +36,7 @@ const help = `agent-discord-presence
   config unset KEY         Restore a setting to its default
 
 Options: --path FILE (setup/uninstall), --profile recommended|lightweight, --events NAME,... (setup/uninstall/config), --interactive/-i (setup/uninstall)
+         --scenarios NAME,... (setup), --summary-triggers reply,tool (setup; empty disables summaries)
          --agent NAME (config show/set/unset, preset apply), --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
 Environment: DISCORD_CLIENT_ID, AGENT_PRESENCE_SOCKET, DISCORD_IPC_PATH, ADP_CONFIG
 `;
@@ -45,7 +47,7 @@ async function main() {
     background: {type: 'boolean', short: 'b'},
     agent: {type: 'string'},
     path: {type: 'string'},
-    profile: {type: 'string'}, events: {type: 'string'}, interactive: {type: 'boolean', short: 'i'},
+    profile: {type: 'string'}, events: {type: 'string'}, scenarios: {type: 'string'}, 'summary-triggers': {type: 'string'}, interactive: {type: 'boolean', short: 'i'},
   }});
   const [command, argument] = positionals;
   const agent = values.agent as Agent | undefined;
@@ -58,6 +60,12 @@ async function main() {
   if (values.events !== undefined && !['setup', 'uninstall'].includes(command) && !generator) throw new Error('--events is only available for setup, uninstall, or config AGENT');
   if (values.profile !== undefined && command !== 'setup' && !generator) throw new Error('--profile is only available for setup or config AGENT');
   if (values.interactive && !['setup', 'uninstall'].includes(command)) throw new Error('--interactive is only available for setup or uninstall');
+  if ((values.scenarios !== undefined || values['summary-triggers'] !== undefined) && command !== 'setup') throw new Error('--scenarios and --summary-triggers are only available for setup');
+  if (command === 'scenarios') {
+    if (positionals.length !== 2) throw new Error('Use scenarios AGENT');
+    for (const s of scenariosFor(argument as Agent)) console.log(`${s.id}: ${s.label} — ${s.description}\n  Events: ${s.events.join(', ')}`);
+    return;
+  }
   if (command === 'events') {
     if (positionals.length !== 2) throw new Error('Use events AGENT');
     for (const e of catalogFor(argument as Agent)) console.log(`${e.id}${e.required ? ' [required]' : ''}: ${e.description}${e.requires.length ? ` Requires: ${e.requires.join(', ')}` : ''}${e.source ? ` (${e.source})` : ''}`);

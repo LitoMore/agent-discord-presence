@@ -30,5 +30,5 @@ export type DesktopRequest =
   | ({action: 'setup'; agent: Agent; revision: string} & SetupOptions)
   | {action: 'uninstall-preview'; agent: Agent; path?: string; events?: string[]}
   | {action: 'uninstall'; agent: Agent; path?: string; revision: string; events?: string[]};
-export interface IntegrationInstructions {agent: Agent; path: string; content: string; instructions: string; prompt: string}
+export interface IntegrationInstructions {agent: Agent; path: string; content: string; instructions: string; prompt: string; summaryCommand?: string}
 export type DesktopResponse = {ok: true; snapshot?: DesktopSnapshot; integration?: IntegrationInstructions; setupPlan?: SetupPlan; setupResult?: SetupResult; uninstallPlan?: UninstallPlan; uninstallResult?: UninstallResult} | {ok: false; error: string};

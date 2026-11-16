@@ -166,7 +166,7 @@ The bundled presets are `default`, `minimal`, `playful`, `codex`, `claude-code`,
 
 The package includes a default activity-writing prompt in [`prompts/presence.md`](prompts/presence.md), editable preferences in [`prompts/default.json`](prompts/default.json), and configuration presets in [`presets.json`](presets.json).
 
-Automatic summaries are enabled by default. After a completed reply, the adapter sends at most 4,000 Unicode characters of assistant text to the local service. A background worker uses this prompt to generate the activity title and subtitle. It never reads transcript files. These prompts generate activity text, not full plugin settings such as images, buttons, or timers.
+Automatic summaries are enabled by default. After a completed reply, the adapter sends at most 4,000 Unicode characters of assistant text to the local service. A background worker uses this prompt to generate the activity title and subtitle. It never reads transcript files. Codex and Claude Code can also generate summaries during tool calls when the `tool-summary` scenario is enabled. These use only the tool name, without arguments or output, so descriptions can be broader than reply summaries. Rapid calls share one active worker and one latest pending context per session. These prompts generate activity text, not full plugin settings such as images, buttons, or timers.
 
 Print the complete system prompt, configuration, and JSON output schema:
 
@@ -424,18 +424,21 @@ The adapter contract was checked against official Harness commit `0d1f50007f9bca
 
 ## Choose integration events
 
-Use the setup wizard to choose an agent and its configuration. Custom mode accepts event numbers or names and includes required plugin callbacks and paired dependencies automatically:
+Use the setup wizard to choose an agent and the scenarios you want. Each scenario selects its required event combination; enter `advanced` to choose individual event numbers or names. Required plugin callbacks and paired dependencies are included automatically:
 
 ```sh
 adp setup
 adp setup codex
+adp scenarios codex
 adp events codex
 adp events pi
 ```
 
-For scripts, select a profile or explicit events. Non-interactive setup without either selection fails immediately instead of waiting for input. Interactive setup previews changes and asks before applying them; explicit parameter-based setup applies the requested selection directly unless `--dry-run` is used.
+For scripts, select scenarios, a profile, or explicit events. Non-interactive setup without a selection fails immediately instead of waiting for input. Interactive setup previews changes and asks before applying them; explicit parameter-based setup applies the requested selection directly unless `--dry-run` is used.
 
 ```sh
+adp setup codex --scenarios work-status,reply-summary,tool-summary,waiting,cleanup --dry-run
+adp setup codex --scenarios work-status,reply-summary,cleanup
 adp setup codex --profile recommended --dry-run
 adp setup codex --profile lightweight
 adp setup codex --events SessionStart,UserPromptSubmit,Stop,SessionEnd
@@ -458,7 +461,21 @@ Setup reads the actual target file and lists events to add, keep, and remove. An
 
 Permission/prompt start and completion callbacks must be selected together for plugin adapters. Reply collection can also require multiple callbacks. `adp events AGENT` shows these dependencies; explicit CLI selections must include them. The desktop selector and wizard include related callbacks together.
 
-In the desktop app, **Agents → Setup → Direct configuration** shows event checkboxes immediately, using the same grouped cards and scrolling layout as removal. Choose a **Recommended**, **Lightweight**, or **Custom** profile, toggle a group heading to select its optional events together, or select events individually. **Select all** and **Clear selection** provide shortcuts; required plugin events stay enabled. The fixed footer shows the selected count and preview/apply actions. After changing a selection or path, choose **Preview configuration**, review the add/keep/remove lists and functional consequences, then **Apply configuration**. **Agent prompt** and **Manual configuration** copy the last previewed selection; copying does not mark it installed. Existing files receive a private backup, and changed files require a fresh preview.
+In the desktop app, **Agents → Setup → Direct configuration** starts with scenarios. Choose **Summarize after each reply** and/or **Summarize during tool calls**, plus work status, waiting, errors, and cleanup as needed. Tool summaries are currently offered for Codex and Claude Code. **Clear activity when the session closes** removes Presence; it does not generate a final summary. A reply finishing (`Stop`) does not close the session (`SessionEnd`).
+
+Expand **Advanced: individual events** to see every supported hook/event, its description, profiles, and individual checkboxes. Disabling a shared hook can affect several scenarios; missing summary events are shown as warnings. Advanced exclusions remain disabled after preview or reopening. Turning off a summary scenario preserves hooks still used for status or another scenario. Required plugin callbacks stay enabled, and paired callbacks are selected together.
+
+After changing a scenario, event selection, or path, choose **Preview configuration**, review the event diff and summary timing, then **Apply configuration**. The fixed footer keeps these actions available while scrolling. **Agent prompt** includes both the selected integration and the summary timing command. **Manual configuration** copies the hook JSON/entry and provides a separate command to save timing; run both. Copying does not mark anything installed. Existing integration files receive a private backup, and changes to the integration or Presence settings require a fresh preview.
+
+Summary timing is saved per agent as `summaryTriggers`, defaulting to `["reply"]`. `[]` disables automatic summary triggers while retaining lifecycle events. The global `enabled` switch still controls automatic generation. Raw event selection remains independent, allowing advanced exclusions:
+
+```sh
+adp setup codex --events SessionStart,UserPromptSubmit,PreToolUse,PostToolUse,Stop,SessionEnd --summary-triggers reply,tool --dry-run
+adp config set summaryTriggers '["reply","tool"]' --agent codex
+adp config set summaryTriggers '[]' --agent codex
+```
+
+Discord publication is coalesced to at most one update every five seconds; every tool call is an opportunity to refresh context, not a guarantee that every intermediate title will be displayed.
 
 OpenCode and Pi store custom choices in their generated entry files; partial edits use this installation's adapter so its event-selection API is available. Reload the extension/plugin after changes. Harness stores its choices in `integrations/deepseek-harness.json` next to the Presence config file (`ADP_CONFIG` or its default). `adp setup deepseek-harness --profile lightweight` saves this policy; install/update the plugin separately using the Harness profile you use, and reload it. The Harness process must use the same `ADP_CONFIG` when that path is customized. This command does not register the plugin with Harness or confirm that it is loaded.
 

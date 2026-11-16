@@ -10,6 +10,7 @@ Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness
 - Generates a summary title, subtitle, activity state, and elapsed session time for your active agent work.
 - Selects the active session across supported agents, reconnects to Discord, and clears stale sessions automatically.
 - Uses the current agent model by default for summaries, with optional custom model, service, language, and prompt styling.
+- Summarizes completed replies by default, with optional tool-call summaries for Codex and Claude Code using tool names only.
 - Sends up to 4,000 characters of the completed assistant reply to the summarization model and includes model usage metadata.
 - Allows automatic summaries to be disabled while keeping lifecycle updates enabled.
 - Runs multiple agents together with [independent model, prompt, and display settings](USAGE.md#independent-configuration-for-each-agent).
@@ -61,7 +62,7 @@ npm run desktop:install
 npm run desktop
 ```
 
-Use **Agents → Setup → Direct configuration** to choose a recommended, lightweight, or custom event selection, preview the changes, and apply them. **Agent prompt** and **Manual configuration** copy the selected setup instead. **Agents → ⋯ → Remove integration…** can remove the whole integration or just selected events. Existing files are backed up before changes. The CLI provides `adp setup` and `adp uninstall AGENT --interactive` wizards, plus `--profile`, `--events`, `--dry-run`, and `--path` for scripts; see [event selection](USAGE.md#choose-integration-events) and [removal details](USAGE.md#remove-an-agent-integration). The app shares the CLI's configuration and local socket. Closing the window keeps the app in the tray; quitting the app leaves the background service running. Use **Stop service** to stop it and clear its Discord activity.
+Use **Agents → Setup → Direct configuration** to choose update scenarios, including summaries after replies or during tool calls (Codex/Claude Code), waiting status, and cleanup on session closure. Scenarios select the necessary event combinations automatically. **Advanced: individual events** keeps profiles and individual hook overrides available. Preview the changes, then apply them. **Agent prompt** and **Manual configuration** copy the selected setup instead. **Agents → ⋯ → Remove integration…** can remove the whole integration or just selected events. Existing files are backed up before changes. The CLI provides `adp setup` and `adp uninstall AGENT --interactive` wizards, plus `--profile`, `--events`, `--dry-run`, and `--path` for scripts; see [event selection](USAGE.md#choose-integration-events) and [removal details](USAGE.md#remove-an-agent-integration). The app shares the CLI's configuration and local socket. Closing the window keeps the app in the tray; quitting the app leaves the background service running. Use **Stop service** to stop it and clear its Discord activity.
 
 See the [desktop development guide](apps/desktop/README.md) for builds and the project structure.
 

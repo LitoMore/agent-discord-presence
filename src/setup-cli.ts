@@ -1,19 +1,21 @@
 import {createInterface} from 'node:readline/promises';
 import {stdin, stdout} from 'node:process';
 import {agents, labels, type Agent} from './protocol.js';
-import {catalogFor, relatedEvents, selectEvents, type EventSelection} from './integration-events.js';
+import {catalogFor, relatedEvents, selectEvents, scenariosFor, validateSummaryTriggers} from './integration-events.js';
 import {applySetup, planSetup, type SetupOptions} from './setup.js';
 import {planUninstall, uninstallIntegration} from './uninstall.js';
 
-export interface ManageFlags {path?: string; profile?: string; events?: string; 'dry-run'?: boolean; interactive?: boolean}
-export function eventFlags(flags: ManageFlags): EventSelection {
+export interface ManageFlags {path?: string; profile?: string; events?: string; scenarios?: string; 'summary-triggers'?: string; 'dry-run'?: boolean; interactive?: boolean}
+export function eventFlags(flags: ManageFlags): SetupOptions {
   if (flags.events !== undefined && !flags.events.trim()) throw new Error('--events requires a comma-separated list');
-  return {profile: flags.profile as EventSelection['profile'], events: flags.events?.split(',').map(id => id.trim())};
+  return {profile: flags.profile as SetupOptions['profile'], events: flags.events?.split(',').map(id => id.trim()),
+    scenarios: flags.scenarios?.split(',').map(id => id.trim()),
+    summaryTriggers: flags['summary-triggers'] === undefined ? undefined : validateSummaryTriggers(flags['summary-triggers'] ? flags['summary-triggers'].split(',').map(id => id.trim()) : [])};
 }
 export async function runManagement(command: 'setup' | 'uninstall', argument: string | undefined, flags: ManageFlags): Promise<void> {
   let agent = argument as Agent;
   const options: SetupOptions = {...eventFlags(flags), path: flags.path};
-  const interactive = flags.interactive || !argument || (command === 'setup' && flags.profile === undefined && flags.events === undefined && !flags['dry-run']);
+  const interactive = flags.interactive || !argument || (command === 'setup' && flags.profile === undefined && flags.events === undefined && flags.scenarios === undefined && flags['summary-triggers'] === undefined && !flags['dry-run']);
   let terminal: ReturnType<typeof createInterface> | undefined;
   try {
     if (interactive) {
@@ -27,11 +29,12 @@ export async function runManagement(command: 'setup' | 'uninstall', argument: st
     }
     catalogFor(agent);
     if (interactive && terminal) {
-      if (command === 'setup' && flags.profile === undefined && flags.events === undefined) {
-        const answer = (await terminal.question('Configuration: 1 recommended, 2 lightweight, 3 custom [1]: ')).trim() || '1';
-        const profile = ({'1': 'recommended', '2': 'lightweight', '3': 'custom'} as const)[answer as '1'];
-        if (!profile) throw new Error('Choose 1, 2, or 3');
-        options.profile = profile;
+      if (command === 'setup' && flags.profile === undefined && flags.events === undefined && flags.scenarios === undefined) {
+        const catalog = scenariosFor(agent);
+        catalog.forEach((s, index) => console.log(`${index + 1}. ${s.label} — ${s.description}`));
+        const answer = (await terminal.question('Scenarios (numbers or names), comma-separated; Enter keeps the current configuration; advanced edits individual events: ')).trim();
+        if (answer === 'advanced') options.profile = 'custom';
+        else if (answer) options.scenarios = answer.split(',').map(value => catalog[Number(value.trim()) - 1]?.id ?? value.trim());
       }
       if ((command === 'setup' && options.profile === 'custom') || (command === 'uninstall' && flags.events === undefined)) {
         const installed = command === 'uninstall' ? (await planUninstall(agent, flags.path)).installedEvents : selectEvents(agent);
@@ -49,13 +52,14 @@ export async function runManagement(command: 'setup' | 'uninstall', argument: st
     if (command === 'setup') {
       const plan = await planSetup(agent, options);
       console.log(`File: ${plan.path}\nDetected: ${plan.installedEvents.join(', ') || '(none)'}\nAdd: ${plan.added.join(', ') || '(none)'}\nKeep: ${plan.kept.join(', ') || '(none)'}\nRemove: ${plan.removed.join(', ') || '(none)'}`);
+      console.log(`Summary updates: ${plan.summaryTriggers.join(', ') || '(off)'}`);
       for (const warning of plan.warnings) console.log(`Note: ${warning}`);
       console.log(plan.note);
       if (plan.status === 'manual') { process.exitCode = 1; return; }
       if (flags['dry-run']) return;
       if (plan.status === 'unchanged') { console.log('Already configured.'); return; }
       if (terminal && (await terminal.question('Apply these changes? [y/N]: ')).trim().toLowerCase() !== 'y') { console.log('Cancelled.'); return; }
-      const result = await applySetup(agent, {...options, profile: undefined, events: plan.selectedEvents}, plan.revision);
+      const result = await applySetup(agent, {path: options.path, events: plan.selectedEvents, summaryTriggers: plan.summaryTriggers}, plan.revision);
       console.log(result.changed ? 'Configuration applied. Reload the agent / start a new session.' : 'No changes.');
       if (result.backup) console.log(`Backup: ${result.backup}`);
     } else {

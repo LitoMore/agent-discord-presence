@@ -13,6 +13,10 @@ export interface PresenceEvent {
   heartbeat?: boolean;
   /** Transient assistant text for summarization; parseEvent never retains it. */
   response?: string;
+  /** Transient, name-only tool context. Never retain tool arguments or output. */
+  tool?: string;
+  /** A tool or permission event continues the current task. */
+  continuation?: boolean;
   model?: string;
   provider?: string;
 }
@@ -29,13 +33,15 @@ export function parseEvent(value: unknown, now = Date.now()): PresenceEvent {
   if (typeof e.updatedAt !== 'number' || !Number.isSafeInteger(e.updatedAt) || e.updatedAt < 0 || e.updatedAt > now + 60_000) throw new Error('Invalid updatedAt');
   if (e.pid !== undefined && (!Number.isSafeInteger(e.pid) || (e.pid as number) <= 0)) throw new Error('Invalid pid');
   if (e.heartbeat !== undefined && typeof e.heartbeat !== 'boolean') throw new Error('Invalid heartbeat');
+  if (e.continuation !== undefined && typeof e.continuation !== 'boolean') throw new Error('Invalid continuation');
   for (const key of ['model', 'provider']) {
     if (e[key] !== undefined && (typeof e[key] !== 'string' || (e[key] as string).length > 256)) throw new Error(`Invalid ${key}`);
   }
   // Whitelist fields: never retain prompts, paths, or tool arguments.
   return {version: 1, agent: e.agent as Agent, sessionId: e.sessionId,
     state: e.state as State, updatedAt: e.updatedAt, pid: e.pid as number | undefined,
-    heartbeat: e.heartbeat as boolean | undefined, model: e.model as string | undefined, provider: e.provider as string | undefined};
+    heartbeat: e.heartbeat as boolean | undefined, continuation: e.continuation as boolean | undefined,
+    model: e.model as string | undefined, provider: e.provider as string | undefined};
 }
 export function sessionKey(e: Pick<PresenceEvent, 'agent' | 'sessionId'>): string {
   return `${e.agent}:${e.sessionId}`;

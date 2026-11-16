@@ -57,6 +57,40 @@ export const eventCatalog: Record<Agent, IntegrationEvent[]> = {
   ],
 };
 export interface EventSelection {profile?: 'recommended' | 'lightweight' | 'custom'; events?: string[]}
+export type SummaryTrigger = 'reply' | 'tool';
+export interface IntegrationScenario {
+  id: string; label: string; description: string; events: string[]; summaryTrigger?: SummaryTrigger;
+}
+/** Scenarios describe outcomes; raw event selection remains the final authority. */
+export function scenariosFor(agent: Agent): IntegrationScenario[] {
+  const catalog = catalogFor(agent);
+  const byCapability = (...capabilities: Capability[]) => catalog.filter(e => capabilities.includes(e.capability)).map(e => e.id);
+  const replyEvents: Record<Agent, string[]> = {
+    codex: ['Stop'], 'claude-code': ['Stop'],
+    opencode: ['session.status', 'session.idle', 'message.updated', 'message.part.updated'],
+    pi: ['agent_settled', 'message_end'],
+    'deepseek-harness': ['agent/status', 'turn/start', 'assistant/message', 'turn/end'],
+  };
+  return [
+    {id: 'work-status', label: 'Track work status', description: 'Show working when a task starts and idle when a reply finishes.', events: byCapability('presence')},
+    {id: 'reply-summary', label: 'Summarize after each reply', description: 'Generate a title and subtitle when a reply finishes, while keeping the session open.', events: replyEvents[agent], summaryTrigger: 'reply' as const},
+    ...((agent === 'codex' || agent === 'claude-code') ? [{id: 'tool-summary', label: 'Summarize during tool calls', description: 'Generate activity text from tool names while working. Rapid calls are merged; tool arguments and output are excluded.', events: ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'], summaryTrigger: 'tool' as const}] : []),
+    {id: 'waiting', label: 'Show when input is needed', description: 'Show waiting for permission or input, then restore working status.', events: byCapability('waiting', 'tools')},
+    {id: 'errors', label: 'Show failures', description: 'Show an error when a reply or session fails.', events: byCapability('errors')},
+    {id: 'cleanup', label: 'Clear activity when the session closes', description: 'Remove the session from Presence when it closes. This does not generate a summary.', events: byCapability('cleanup')},
+  ].filter(s => s.events.length > 0);
+}
+export function validateSummaryTriggers(value: unknown): SummaryTrigger[] {
+  if (!Array.isArray(value) || value.some(id => id !== 'reply' && id !== 'tool')) throw new Error('Choose summary triggers: reply, tool');
+  return (['reply', 'tool'] as const).filter(id => value.includes(id));
+}
+export function scenarioSelection(agent: Agent, ids: unknown): {events: string[]; summaryTriggers: SummaryTrigger[]} {
+  const catalog = scenariosFor(agent);
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !catalog.some(s => s.id === id))) throw new Error(`Unsupported scenarios for ${agent}`);
+  const selected = catalog.filter(s => ids.includes(s.id));
+  return {events: relatedEvents(agent, [...new Set([...catalogFor(agent).filter(e => e.required).map(e => e.id), ...selected.flatMap(s => s.events)])]),
+    summaryTriggers: validateSummaryTriggers(selected.flatMap(s => s.summaryTrigger ? [s.summaryTrigger] : []))};
+}
 export function catalogFor(agent: Agent): IntegrationEvent[] {
   if (!agents.includes(agent)) throw new Error('Unknown agent');
   return eventCatalog[agent];

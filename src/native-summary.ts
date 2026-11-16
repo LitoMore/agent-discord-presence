@@ -10,7 +10,7 @@ export interface NativeSummaryJob {
   input: ReturnType<typeof buildPresencePrompt>;
 }
 export function nativeSummarySettings(settings: Settings): string {
-  return JSON.stringify([settings.enabled, settings.service, settings.model, settings.provider, settings.customPrompt, settings.maxLength]);
+  return JSON.stringify([settings.enabled, settings.summaryTriggers, settings.service, settings.model, settings.provider, settings.customPrompt, settings.maxLength]);
 }
 interface Chunk {type: string; index?: number; text?: string; blockType?: string; block?: {type: string; text?: string}; reason?: {kind: string}}
 export interface HarnessLlm {

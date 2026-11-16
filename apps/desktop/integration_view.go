@@ -123,6 +123,82 @@ func (a *nativeApp) setupChanged() {
 	a.setupProfile = "Custom"
 	a.setupCopiedUntil = time.Time{}
 }
+func selectedTriggers(selected map[string]bool) []string {
+	result := []string{}
+	for _, id := range []string{"reply", "tool"} {
+		if selected[id] {
+			result = append(result, id)
+		}
+	}
+	return result
+}
+func scenarioComplete(s integrationScenario, selected map[string]bool) bool {
+	for _, id := range s.Events {
+		if !selected[id] {
+			return false
+		}
+	}
+	return len(s.Events) > 0
+}
+func scenarioEnabled(s integrationScenario, selected, triggers map[string]bool) bool {
+	if s.SummaryTrigger != "" {
+		return triggers[s.SummaryTrigger]
+	}
+	return scenarioComplete(s, selected)
+}
+func toggleScenario(p *setupPlan, selected, triggers map[string]bool, scenario integrationScenario, enabled bool) {
+	// Keep hooks shared with another enabled scenario, and required plugin callbacks.
+	keep := map[string]bool{}
+	for _, other := range p.Scenarios {
+		if other.ID != scenario.ID && scenarioEnabled(other, selected, triggers) {
+			for _, id := range other.Events {
+				keep[id] = true
+			}
+		}
+	}
+	if scenario.SummaryTrigger != "" {
+		triggers[scenario.SummaryTrigger] = enabled
+	}
+	for _, id := range scenario.Events {
+		if enabled {
+			toggleEvent(p.Catalog, selected, id, true, false)
+		} else if !keep[id] {
+			required := false
+			for _, event := range p.Catalog {
+				if event.ID == id {
+					required = event.Required
+				}
+			}
+			if !required {
+				toggleEvent(p.Catalog, selected, id, false, false)
+			}
+		}
+	}
+}
+func (a *nativeApp) scenarioChoices(c *ui.Context) {
+	p := a.setupPlan
+	ui.Column(c).Gap(10).Children(func() {
+		ui.Text(c, a.t("When should Presence update?")).FontSize(13).FontWeight(600)
+		muted(c, a.t("Choose what you want to happen. The required event combinations are selected automatically."))
+		for _, scenario := range p.Scenarios {
+			ui.Column(c.Key(scenario.ID)).Gap(5).Padding(12, 14).Border(1, c.Theme().Border).Radius(8).Children(func() {
+				enabled := scenarioEnabled(scenario, a.setupSelected, a.setupTriggers)
+				if ui.Checkbox(c, &enabled, a.t(scenario.Label)).FontSize(12).Disabled(a.busy).Changed() {
+					toggleScenario(p, a.setupSelected, a.setupTriggers, scenario, enabled)
+					a.setupChanged()
+				}
+				ui.Column(c).Padding(0, 0, 0, 24).Gap(4).Children(func() {
+					muted(c, a.t(scenario.Description))
+					muted(c, a.t("Events: %s", strings.Join(scenario.Events, ", "))).FontSize(10)
+					if enabled && !scenarioComplete(scenario, a.setupSelected) {
+						ui.Text(c, a.t("Some required events are disabled in Advanced. This scenario may not update.")).FontSize(11).TextColor(c.Theme().Warning)
+					}
+				})
+			})
+		}
+		muted(c, a.t("Summary scenarios follow your automatic-summary and model settings. Discord publishes at most once every 5 seconds."))
+	})
+}
 func integrationScrollHeight(c *ui.Context) float32 {
 	_, height := c.Size()
 	return max(240, min(600, height-180))
@@ -140,54 +216,66 @@ func (a *nativeApp) integrationFileField(c *ui.Context, key string, path *string
 }
 func (a *nativeApp) managedSetupDialog(c *ui.Context) {
 	p := a.setupPlan
+	bodyHeight := integrationScrollHeight(c) - 42
+	if a.setupMode == 2 {
+		bodyHeight -= 48
+	}
 	ui.Modal(c, &a.setupOpen, func() {
 		ui.Column(c).Width(640).MaxWidthPercent(100).Gap(18).Children(func() {
 			ui.Text(c, a.t("Set up %s", agentLabels[p.Agent])).FontSize(19).FontWeight(600)
 			ui.Segmented(c, &a.setupMode, a.t("Agent prompt"), a.t("Manual configuration"), a.t("Direct configuration")).FillEqually().Label(a.t("Setup method"))
-			ui.Scroll(c).Scrollbars(false).Height(integrationScrollHeight(c) - 42).Children(func() {
+			if a.setupMode == 2 {
+				ui.Checkbox(c, &a.setupAdvanced, a.t("Advanced: individual events")).FontSize(12)
+			}
+			ui.Scroll(c).Scrollbars(false).Height(bodyHeight).Children(func() {
 				ui.Column(c).Gap(20).Children(func() {
 					if a.setupMode == 2 {
-						a.integrationFileField(c, "setup-path", &a.setupPath, a.busy || p.Kind == "policy", a.setupChanged)
-						ui.Column(c).Gap(7).Children(func() {
-							ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-								ui.Text(c, a.t("Events to register")).FontSize(13).FontWeight(600).Grow(1)
-								if a.selectValue(c, &a.setupProfile, []string{"Recommended", "Lightweight", "Custom"}).Label(a.t("Configuration profile")).Tooltip(a.t("Configuration profile")).Width(140).FontSize(11).Disabled(a.busy).Changed() {
-									if a.setupProfile != "Custom" {
+						if !a.setupAdvanced {
+							a.scenarioChoices(c)
+						}
+						if a.setupAdvanced {
+							a.integrationFileField(c, "setup-path", &a.setupPath, a.busy || p.Kind == "policy", a.setupChanged)
+							ui.Column(c).Gap(7).Children(func() {
+								ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+									ui.Text(c, a.t("Events to register")).FontSize(13).FontWeight(600).Grow(1)
+									if a.selectValue(c, &a.setupProfile, []string{"Recommended", "Lightweight", "Custom"}).Label(a.t("Configuration profile")).Tooltip(a.t("Configuration profile")).Width(140).FontSize(11).Disabled(a.busy).Changed() {
+										if a.setupProfile != "Custom" {
+											a.setupSelected = map[string]bool{}
+											for _, event := range p.Catalog {
+												a.setupSelected[event.ID] = a.setupProfile == "Recommended" || event.Required || (event.Capability != "waiting" && event.Capability != "tools" && event.Capability != "summary")
+											}
+											a.setupDirty = true
+											a.setupResult = nil
+										}
+									}
+									ui.Button(c, a.t("Select all")).FontSize(11).Disabled(a.busy).OnClick(func() {
 										a.setupSelected = map[string]bool{}
 										for _, event := range p.Catalog {
-											a.setupSelected[event.ID] = a.setupProfile == "Recommended" || event.Required || (event.Capability != "waiting" && event.Capability != "tools" && event.Capability != "summary")
+											a.setupSelected[event.ID] = true
 										}
-										a.setupDirty = true
-										a.setupResult = nil
-									}
-								}
-								ui.Button(c, a.t("Select all")).FontSize(11).Disabled(a.busy).OnClick(func() {
-									a.setupSelected = map[string]bool{}
-									for _, event := range p.Catalog {
-										a.setupSelected[event.ID] = true
-									}
-									a.setupChanged()
+										a.setupChanged()
+									})
+									ui.Button(c, a.t("Clear selection")).FontSize(11).Disabled(a.busy).OnClick(func() {
+										a.setupSelected = map[string]bool{}
+										for _, event := range p.Catalog {
+											if event.Required {
+												toggleEvent(p.Catalog, a.setupSelected, event.ID, true, false)
+											}
+										}
+										a.setupChanged()
+									})
 								})
-								ui.Button(c, a.t("Clear selection")).FontSize(11).Disabled(a.busy).OnClick(func() {
-									a.setupSelected = map[string]bool{}
-									for _, event := range p.Catalog {
-										if event.Required {
-											toggleEvent(p.Catalog, a.setupSelected, event.ID, true, false)
-										}
+								ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
+									muted(c, a.t("Select the events you want to register.")).Grow(1)
+									label := "Detected %d registered event(s)."
+									if p.Kind == "policy" {
+										label = "Saved %d policy event(s)."
 									}
-									a.setupChanged()
+									muted(c, a.t(label, len(p.InstalledEvents))).Shrink(0)
 								})
 							})
-							ui.Row(c).Gap(12).AlignItems(ui.Start).Children(func() {
-								muted(c, a.t("Select the events you want to register.")).Grow(1)
-								label := "Detected %d registered event(s)."
-								if p.Kind == "policy" {
-									label = "Saved %d policy event(s)."
-								}
-								muted(c, a.t(label, len(p.InstalledEvents))).Shrink(0)
-							})
-						})
-						a.eventChoices(c, p.Catalog, a.setupSelected, false, a.setupChanged)
+							a.eventChoices(c, p.Catalog, a.setupSelected, false, a.setupChanged)
+						}
 						if a.setupDirty {
 							muted(c, a.t("Preview the updated selection before applying or copying it."))
 						} else {
@@ -196,9 +284,14 @@ func (a *nativeApp) managedSetupDialog(c *ui.Context) {
 								ui.Text(c, a.t("Add: %s", strings.Join(p.Added, ", "))).FontSize(11)
 								ui.Text(c, a.t("Keep: %s", strings.Join(p.Kept, ", "))).FontSize(11)
 								ui.Text(c, a.t("Remove: %s", strings.Join(p.Removed, ", "))).FontSize(11)
+								ui.Text(c, a.t("Summary updates: %s", strings.Join(p.SummaryTriggers, ", "))).FontSize(11)
 							})
 							for _, warning := range p.Warnings {
-								ui.Text(c, a.t(warning)).FontSize(11).TextColor(c.Theme().Warning)
+								message := a.t(warning)
+								if missing, ok := strings.CutPrefix(warning, "Summary scenario is missing events: "); ok {
+									message = a.t("Summary scenario is missing events: %s.", strings.TrimSuffix(missing, "."))
+								}
+								ui.Text(c, message).FontSize(11).TextColor(c.Theme().Warning)
 							}
 							ui.Text(c, a.t(p.Note)).FontSize(11)
 							if p.Status == "unchanged" {
@@ -211,6 +304,11 @@ func (a *nativeApp) managedSetupDialog(c *ui.Context) {
 							content, label = &a.setup.Content, "Integration configuration"
 						}
 						ui.TextArea(c.Key(a.setupMode), content).Label(a.t(label)).ReadOnly(true).Height(240).Font("monospace").FontSize(11)
+						if a.setupMode == 1 && a.setup.SummaryCommand != "" {
+							muted(c, a.t("Also run this command to save summary update timing:"))
+							ui.TextArea(c.Key("summary-command"), &a.setup.SummaryCommand).Label(a.t("Summary settings command")).ReadOnly(true).Height(80).Font("monospace").FontSize(11)
+							ui.Button(c, a.t("Copy summary command")).OnClick(func() { c.WriteClipboard(a.setup.SummaryCommand) })
+						}
 					}
 					if a.setupResult != nil {
 						ui.Text(c, a.t("Configuration applied. Reload the agent or start a new session.")).TextColor(c.Theme().Success).Role(ui.RoleStatus)
@@ -233,14 +331,14 @@ func (a *nativeApp) managedSetupDialog(c *ui.Context) {
 				ui.Button(c, a.t("Close")).Disabled(a.busy).OnClick(func() { a.setupOpen = false })
 				if a.setupMode == 2 {
 					ui.Button(c, a.t("Preview configuration")).Disabled(a.busy || len(selectedIDs(p.Catalog, a.setupSelected)) == 0).OnClick(func() {
-						request := map[string]any{"action": "integration", "agent": p.Agent, "language": a.prefs.Language, "events": selectedIDs(p.Catalog, a.setupSelected)}
+						request := map[string]any{"action": "integration", "agent": p.Agent, "language": a.prefs.Language, "events": selectedIDs(p.Catalog, a.setupSelected), "summaryTriggers": selectedTriggers(a.setupTriggers)}
 						if p.Kind != "policy" {
 							request["path"] = a.setupPath
 						}
 						a.dispatch(request, "")
 					})
 					ui.PrimaryButton(c, a.t("Apply configuration")).Disabled(a.busy || a.setupDirty || p.Status != "ready" || a.setupResult != nil).OnClick(func() {
-						a.dispatch(map[string]any{"action": "setup", "agent": p.Agent, "events": p.SelectedEvents, "path": p.Path, "revision": p.Revision}, "")
+						a.dispatch(map[string]any{"action": "setup", "agent": p.Agent, "events": p.SelectedEvents, "summaryTriggers": p.SummaryTriggers, "path": p.Path, "revision": p.Revision}, "")
 					})
 				} else {
 					label := "Copy prompt"

@@ -48,7 +48,7 @@ export function codexGenerator(config: Partial<PromptConfig> & {model?: string} 
     } finally { await rm(directory, {recursive: true, force: true}); }
   };
 }
-interface Job {key: string; agent: Agent; response: string; updatedAt: number; startedAt: number; digest: string; revision: number; context: ModelContext}
+interface Job {key: string; agent: Agent; response: string; updatedAt: number; startedAt: number; digest: string; revision: number; context: ModelContext; trigger: 'reply' | 'tool'}
 /** Single worker, bounded latest-per-session queue; source text lives only in pending work. */
 export class SummaryGeneration {
   private pending = new Map<string, Job>();
@@ -63,21 +63,22 @@ export class SummaryGeneration {
   constructor(private store: SessionStore, private generate: Generate, private refresh: () => void,
     private timeoutMs = 60_000) {}
   get status() { return {active: !!this.active, queued: this.pending.size, completed: this.completed, failed: this.failed, discarded: this.discarded, lastError: this.lastError}; }
-  submit(key: string, response: unknown): void {
+  submit(key: string, response: unknown, trigger: 'reply' | 'tool' = 'reply'): void {
     const text = boundedResponse(response); const s = this.store.sessions.get(key);
-    if (this.stopped || !s || s.state !== 'idle' || !text) return;
-    const digest = createHash('sha256').update(`${s.startedAt}\0${text}`).digest('hex');
+    if (this.stopped || !s || !(trigger === 'reply' ? s.state === 'idle' : ['working', 'waiting'].includes(s.state)) || !text) return;
+    const digest = createHash('sha256').update(`${s.startedAt}\0${trigger === 'tool' ? s.generationRevision : ''}\0${trigger}\0${text}`).digest('hex');
     if (this.seen.get(key) === digest) return;
     this.seen.set(key, digest);
     if (this.seen.size > 256) this.seen.delete(this.seen.keys().next().value!);
     if (this.pending.size >= 32 && !this.pending.has(key)) this.pending.delete(this.pending.keys().next().value!);
     this.pending.set(key, {key, agent: s.agent, response: text, updatedAt: s.updatedAt, startedAt: s.startedAt, digest,
-      revision: s.generationRevision, context: {model: s.model, provider: s.provider}});
+      revision: s.generationRevision, context: {model: s.model, provider: s.provider}, trigger});
     if (!this.running) this.running = this.drain().finally(() => { this.running = undefined; });
   }
   private current(job: Job): boolean {
     const s = this.store.sessions.get(job.key);
-    return !!s && s.generationRevision === job.revision && s.startedAt === job.startedAt && s.state === 'idle';
+    return !!s && s.generationRevision === job.revision && s.startedAt === job.startedAt &&
+      (job.trigger === 'reply' ? s.state === 'idle' : ['working', 'waiting'].includes(s.state));
   }
   reconcile(): void {
     for (const [key, job] of this.pending) if (!this.current(job)) {
@@ -96,6 +97,9 @@ export class SummaryGeneration {
         const result = await this.generate(job.agent, job.response, controller.signal, job.context);
         if (controller.signal.aborted || !this.current(job) || this.stopped) { this.discarded++; continue; }
         this.store.setSummary(key, result, this.store.sessions.get(key)!.updatedAt, job.startedAt);
+        // Publishing our own result must not invalidate newer tool context queued during generation.
+        const next = this.pending.get(key);
+        if (next?.revision === job.revision) next.revision = this.store.sessions.get(key)!.generationRevision;
         this.completed++; this.lastError = null; this.refresh();
       } catch (error) {
         if (this.current(job) && !this.stopped) { this.failed++; this.seen.delete(key);

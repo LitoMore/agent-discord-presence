@@ -21,7 +21,7 @@ export class SessionStore {
     // Bound memory even when a client invents a new session per event.
     if (!prior && this.sessions.size >= 256) throw new Error('Session limit reached');
     this.sessions.set(key, {...e, model: e.model ?? prior?.model, provider: e.provider ?? prior?.provider,
-      generationRevision: (prior?.generationRevision ?? 0) + (!e.heartbeat && e.state !== 'idle' ? 1 : 0),
+      generationRevision: (prior?.generationRevision ?? 0) + (!e.heartbeat && e.state !== 'idle' && !e.continuation ? 1 : 0),
       summary: prior?.summary, startedAt: prior?.startedAt ?? e.updatedAt,
       lastSeen: now});
   }

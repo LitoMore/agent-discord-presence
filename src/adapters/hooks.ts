@@ -20,6 +20,8 @@ export function hookEvent(agent: HookAgent, payload: Record<string, unknown>, no
   if (name === 'SessionEnd') state = 'closed';
   if (!state) return;
   return {version: 1, agent: agent as Agent, sessionId: payload.session_id, state, updatedAt: now,
+    ...(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Notification'].includes(name as string) ? {continuation: true} : {}),
+    ...(name === 'PreToolUse' && typeof payload.tool_name === 'string' && /^[a-zA-Z0-9_.:-]{1,128}$/.test(payload.tool_name) ? {tool: payload.tool_name} : {}),
     ...(typeof payload.model === 'string' ? {model: payload.model} : {}),
     ...(name === 'Stop' ? {response: boundedResponse(payload.last_assistant_message)} : {})};
 }

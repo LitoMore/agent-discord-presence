@@ -3,18 +3,20 @@ import {lstat, readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {socketPath} from './client.js';
-import {settingsPath} from './settings.js';
+import {settingsPath, loadSettings, resolveSettings, saveSetting} from './settings.js';
 import {hookConfig} from './adapters/hooks.js';
-import {catalogFor, selectEvents, selectionWarnings, validateEvents, type EventSelection, type IntegrationEvent} from './integration-events.js';
+import {catalogFor, selectEvents, selectionWarnings, validateEvents, scenariosFor, scenarioSelection, validateSummaryTriggers,
+  type EventSelection, type IntegrationEvent, type IntegrationScenario, type SummaryTrigger} from './integration-events.js';
 import {entryContent, policyPath, quote} from './integration-config.js';
 import {commitIntegrationFile, integrationPath, recognizedEntry, removeHooks} from './uninstall.js';
 import type {Agent} from './protocol.js';
 
-export interface SetupOptions extends EventSelection {path?: string}
+export interface SetupOptions extends EventSelection {path?: string; scenarios?: string[]; summaryTriggers?: SummaryTrigger[]}
 export interface SetupPlan {
   agent: Agent; path: string; kind: 'hooks' | 'entry' | 'policy'; status: 'ready' | 'unchanged' | 'manual';
   selectedEvents: string[]; installedEvents: string[]; added: string[]; removed: string[]; kept: string[];
   catalog: IntegrationEvent[]; warnings: string[]; revision: string; note: string;
+  scenarios: IntegrationScenario[]; summaryTriggers: SummaryTrigger[];
 }
 export interface SetupResult {plan: SetupPlan; changed: boolean; backup?: string}
 export function hookCommand(): string {
@@ -22,6 +24,12 @@ export function hookCommand(): string {
 }
 async function inspect(agent: Agent, options: SetupOptions) {
   const catalog = catalogFor(agent);
+  if (options.scenarios !== undefined && (options.events !== undefined || options.profile !== undefined || options.summaryTriggers !== undefined)) throw new Error('Use scenarios or a custom event selection');
+  const configuration = loadSettings();
+  const effective = resolveSettings(configuration, agent);
+  const scenario = options.scenarios === undefined ? undefined : scenarioSelection(agent, options.scenarios);
+  const summaryTriggers = validateSummaryTriggers(scenario?.summaryTriggers ?? options.summaryTriggers ?? effective.summaryTriggers);
+  const settingsChanged = JSON.stringify(summaryTriggers) !== JSON.stringify(effective.summaryTriggers);
   if (options.path !== undefined && (typeof options.path !== 'string' || !options.path.trim() || options.path.includes('\0'))) throw new Error('Invalid integration path');
   const path = resolve(options.path ?? (agent === 'deepseek-harness' ? policyPath() : integrationPath(agent)));
   if (agent === 'deepseek-harness' && options.path !== undefined && path !== policyPath()) throw new Error('Harness options use the Presence policy file; choose the installation profile in Harness.');
@@ -46,8 +54,8 @@ async function inspect(agent: Agent, options: SetupOptions) {
     }
   } catch { manual = true; }
   // Existing files are the source of truth. A copied prompt is never counted as installed.
-  const selected = options.events !== undefined || options.profile !== undefined ? selectEvents(agent, options)
-    : installed.length ? validateEvents(agent, installed) : selectEvents(agent);
+  const selected = scenario?.events ?? (options.events !== undefined || options.profile !== undefined ? selectEvents(agent, options)
+    : installed.length ? validateEvents(agent, installed) : selectEvents(agent));
   if (!selected.length) throw new Error('Select at least one event, or use uninstall to remove the integration.');
   const added = selected.filter(id => !installed.includes(id));
   const removed = installed.filter(id => !selected.includes(id));
@@ -63,19 +71,28 @@ async function inspect(agent: Agent, options: SetupOptions) {
     else after = JSON.stringify({events: selected}, null, 2) + '\n';
     if (!added.length && !removed.length && before !== undefined) after = before;
   }
-  const plan: SetupPlan = {agent, path, kind, status: manual ? 'manual' : before === after ? 'unchanged' : 'ready',
-    selectedEvents: selected, installedEvents: installed, added, removed, kept, catalog, warnings: selectionWarnings(agent, selected), revision: '',
+  const warnings = selectionWarnings(agent, selected);
+  if (summaryTriggers.includes('tool') && !scenariosFor(agent).some(s => s.summaryTrigger === 'tool')) warnings.push('Tool-call summaries are not supported by this adapter.');
+  for (const scenario of scenariosFor(agent)) {
+    if (scenario.summaryTrigger && summaryTriggers.includes(scenario.summaryTrigger) && !scenario.events.every(id => selected.includes(id))) {
+      warnings.push(`Summary scenario is missing events: ${scenario.events.filter(id => !selected.includes(id)).join(', ')}.`);
+    }
+  }
+  const plan: SetupPlan = {agent, path, kind, status: manual ? 'manual' : before === after && !settingsChanged ? 'unchanged' : 'ready',
+    selectedEvents: selected, installedEvents: installed, added, removed, kept, catalog, warnings, revision: '',
+    scenarios: scenariosFor(agent), summaryTriggers,
     note: manual ? 'The existing integration contains unsupported content. Review it manually before applying changes.'
       : kind === 'policy' ? 'Harness options are saved separately. Install the plugin through Harness, then reload it to apply these options.'
       : 'Review the selected events. Other hooks and settings will be preserved.'};
-  plan.revision = createHash('sha256').update(JSON.stringify([plan, before, after, mode])).digest('hex');
-  return {plan, before, after, mode};
+  plan.revision = createHash('sha256').update(JSON.stringify([plan, before, after, mode, configuration])).digest('hex');
+  return {plan, before, after, mode, settingsChanged};
 }
 export async function planSetup(agent: Agent, options: SetupOptions = {}): Promise<SetupPlan> { return (await inspect(agent, options)).plan; }
 export async function applySetup(agent: Agent, options: SetupOptions, revision: string): Promise<SetupResult> {
-  const {plan, before, after, mode} = await inspect(agent, options);
+  const {plan, before, after, mode, settingsChanged} = await inspect(agent, options);
   if (revision !== plan.revision) throw new Error('The integration changed. Preview the configuration again.');
   if (plan.status !== 'ready') return {plan, changed: false};
-  const backup = await commitIntegrationFile(plan.path, before, after, mode);
+  const backup = before === after ? undefined : await commitIntegrationFile(plan.path, before, after, mode);
+  if (settingsChanged) await saveSetting('summaryTriggers', plan.summaryTriggers, false, agent);
   return {plan, changed: true, backup};
 }

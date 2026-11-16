@@ -7,11 +7,12 @@ import {DEFAULT_PROMPT_CONFIG} from './prompts.js';
 import {validatePresence, type PresenceOverrides} from './presentation.js';
 import {agents, type Agent} from './protocol.js';
 import {PRESETS} from './preset-data.js';
-export interface Settings {enabled: boolean; customPrompt: string; maxLength: number; model: string;
+import {validateSummaryTriggers, type SummaryTrigger} from './integration-events.js';
+export interface Settings {enabled: boolean; summaryTriggers: SummaryTrigger[]; customPrompt: string; maxLength: number; model: string;
   service: 'session' | 'openai-compatible'; provider: string; baseUrl: string; apiKeyEnv: string; presence: PresenceOverrides}
 export interface SettingsLayer extends Partial<Settings> {presets?: string[]}
 export interface Configuration extends SettingsLayer {agents?: Partial<Record<Agent, SettingsLayer>>}
-export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({enabled: true, ...DEFAULT_PROMPT_CONFIG,
+export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({enabled: true, summaryTriggers: ['reply'] as SummaryTrigger[], ...DEFAULT_PROMPT_CONFIG,
   service: 'session', model: '', provider: '', baseUrl: '', apiKeyEnv: 'OPENAI_API_KEY', presence: {}});
 export function settingsPath(): string {
   return process.env.ADP_CONFIG ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'agent-discord-presence', 'config.json');
@@ -30,6 +31,7 @@ function validateBase(value: unknown): Settings {
   if (typeof s.enabled !== 'boolean' || typeof s.customPrompt !== 'string' || s.customPrompt.length > 4000 ||
       typeof s.model !== 'string' || s.model.length > 128 || !Number.isInteger(s.maxLength) || s.maxLength < 20 || s.maxLength > 120) throw new Error('Invalid summary settings');
   s.presence = validatePresence(s.presence);
+  s.summaryTriggers = validateSummaryTriggers(s.summaryTriggers);
   return s;
 }
 /** Objects inherit recursively; arrays and null explicitly replace inherited values. */

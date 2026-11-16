@@ -71,6 +71,7 @@ type status struct {
 }
 type settings struct {
 	Enabled                                      bool
+	SummaryTriggers                              []string
 	CustomPrompt                                 string
 	MaxLength                                    int
 	Model, Service, Provider, BaseURL, APIKeyEnv string
@@ -84,7 +85,11 @@ type snapshot struct {
 	AgentSettings                    map[string]settings
 	ConfigPath, SocketPath, Version  string
 }
-type integration struct{ Agent, Path, Content, Instructions, Prompt string }
+type integration struct{ Agent, Path, Content, Instructions, Prompt, SummaryCommand string }
+type integrationScenario struct {
+	ID, Label, Description, SummaryTrigger string
+	Events                                 []string
+}
 type integrationEvent struct {
 	ID, Capability, Description, Source string
 	Required                            bool
@@ -94,6 +99,8 @@ type setupPlan struct {
 	Agent, Path, Kind, Status, Revision, Note                       string
 	SelectedEvents, InstalledEvents, Added, Removed, Kept, Warnings []string
 	Catalog                                                         []integrationEvent
+	Scenarios                                                       []integrationScenario
+	SummaryTriggers                                                 []string
 }
 type setupResult struct {
 	Plan    setupPlan
@@ -163,6 +170,8 @@ type nativeApp struct {
 	setupResult                         *setupResult
 	setupPath, setupProfile, setupError string
 	setupSelected                       map[string]bool
+	setupTriggers                       map[string]bool
+	setupAdvanced                       bool
 	setupDirty                          bool
 	removal                             *uninstallPlan
 	removalResult                       *uninstallResult
@@ -328,6 +337,7 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		a.removal = &response.UninstallResult.Plan
 		a.removalOpen = true
 	}
+	setupOpening := !a.setupOpen
 	if response.Integration != nil {
 		a.setup = response.Integration
 		a.setupOpen = true
@@ -336,10 +346,15 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		a.setupCopyError = ""
 	}
 	if response.SetupPlan != nil {
+		opening := a.setupPlan == nil || setupOpening || a.setupPlan.Agent != response.SetupPlan.Agent
 		a.setupPlan = response.SetupPlan
 		a.setupResult = nil
 		a.setupPath = response.SetupPlan.Path
 		a.setupSelected = selectionMap(response.SetupPlan.SelectedEvents)
+		a.setupTriggers = selectionMap(response.SetupPlan.SummaryTriggers)
+		if opening {
+			a.setupAdvanced = false
+		}
 		a.setupProfile = "Custom"
 		all, light := true, true
 		for _, event := range response.SetupPlan.Catalog {
@@ -668,7 +683,7 @@ func (a *nativeApp) saveEditor() {
 func (a *nativeApp) resetEditor() {
 	keys := []string{"presence"}
 	if a.page == "Summaries" {
-		keys = []string{"enabled", "customPrompt", "maxLength", "model", "service", "provider", "baseUrl", "apiKeyEnv"}
+		keys = []string{"enabled", "summaryTriggers", "customPrompt", "maxLength", "model", "service", "provider", "baseUrl", "apiKeyEnv"}
 	}
 	a.dispatch(map[string]any{"action": "reset", "scope": scopeID(a.scope), "keys": keys}, "Settings reset.")
 }

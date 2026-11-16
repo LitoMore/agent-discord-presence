@@ -103,7 +103,7 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
           const key = sessionKey(message.event);
           const session = store.sessions.get(key);
           const effective = resolveSettings(settings, session?.agent);
-          if (session && session.updatedAt === message.event.updatedAt && (options.generate || (!options.dryRun && effective.enabled))) {
+          if (session && !message.event.heartbeat && effective.summaryTriggers.includes('reply') && session.updatedAt === message.event.updatedAt && (options.generate || (!options.dryRun && effective.enabled))) {
             if (message.nativeSummary === true && session.agent === 'deepseek-harness' && effective.service === 'session' && !options.generate) {
               if (session.state === 'idle' && !message.event.heartbeat && effective.enabled) nativeSummary = {
                 key, updatedAt: session.updatedAt, startedAt: session.startedAt, revision: session.generationRevision,
@@ -112,6 +112,15 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
                 input: buildPresencePrompt({agent: session.agent, response: boundedResponse(message.event.response)}, effective),
               };
             } else generation.submit(key, message.event.response);
+          }
+        }
+        if (message.type === 'event' && !message.event.heartbeat && typeof message.event.tool === 'string' &&
+            /^[a-zA-Z0-9_.:-]{1,128}$/.test(message.event.tool) && ['codex', 'claude-code'].includes(message.event.agent)) {
+          const key = sessionKey(message.event), session = store.sessions.get(key);
+          const effective = resolveSettings(settings, session?.agent);
+          if (session && session.updatedAt === message.event.updatedAt && effective.summaryTriggers.includes('tool') &&
+              (options.generate || (!options.dryRun && effective.enabled))) {
+            generation.submit(key, `A tool invocation is starting: ${message.event.tool}. Describe only this activity; its purpose and outcome are unknown.`, 'tool');
           }
         }
         socket.end(JSON.stringify(message.type === 'status' ? {

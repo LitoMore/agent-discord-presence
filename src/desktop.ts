@@ -8,7 +8,7 @@ import {hookConfig} from './adapters/hooks.js';
 import type {DesktopRequest, DesktopResponse, DesktopSnapshot, IntegrationInstructions, ServiceStatus, SettingsScope} from './desktop-protocol.js';
 import {integrationPath, planUninstall, uninstallIntegration} from './uninstall.js';
 import {applySetup, hookCommand, planSetup, type SetupOptions} from './setup.js';
-import {selectEvents} from './integration-events.js';
+import {selectEvents, scenarioSelection, validateSummaryTriggers} from './integration-events.js';
 import {entryContent} from './integration-config.js';
 
 const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
@@ -53,6 +53,8 @@ function adapterInstructions(agent: Agent, chinese: boolean, options: SetupOptio
 }
 export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' = 'en', options: SetupOptions = {}): IntegrationInstructions {
   const chinese = language === 'zh-CN';
+  if (options.scenarios !== undefined) options = {...options, ...scenarioSelection(agent, options.scenarios), scenarios: undefined};
+  const summaryCommand = options.summaryTriggers === undefined ? undefined : `${hookCommand()} config set summaryTriggers ${quote(JSON.stringify(validateSummaryTriggers(options.summaryTriggers)))} --agent ${agent}`;
   const setup = adapterInstructions(agent, chinese, options);
   const root = fileURLToPath(new URL('../', import.meta.url));
   const prompt = (chinese ? [
@@ -112,7 +114,7 @@ export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' =
     '',
     'Verify the service and Discord connection, then summarize the files changed and the checks performed. Tell me if I still need to open Discord, trust Codex hooks, reload extensions, restart the agent, or begin a new session before activity can appear.',
   ]).join('\n');
-  return {...setup, prompt};
+  return {...setup, summaryCommand, prompt: summaryCommand ? prompt + '\n\n' + (chinese ? '同时运行以下命令，保存此智能体的摘要更新时机：' : 'Also run this command to save summary update timing for this agent:') + '\n```sh\n' + summaryCommand + '\n```' : prompt};
 }
 /** Commands are serialized by the worker; read the latest file before every patch. */
 export async function handleDesktopRequest(value: unknown): Promise<DesktopResponse> {
@@ -121,7 +123,7 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
     const message = value as DesktopRequest;
     if (message.action === 'integration') {
       const setupPlan = await planSetup(message.agent, message);
-      return {ok: true, setupPlan, integration: integrationInstructions(message.agent, message.language, {events: setupPlan.selectedEvents, path: setupPlan.kind === 'policy' ? undefined : setupPlan.path})};
+      return {ok: true, setupPlan, integration: integrationInstructions(message.agent, message.language, {events: setupPlan.selectedEvents, summaryTriggers: setupPlan.summaryTriggers, path: setupPlan.kind === 'policy' ? undefined : setupPlan.path})};
     }
     if (message.action === 'setup') {
       if (typeof message.revision !== 'string' || !/^[a-f0-9]{64}$/.test(message.revision)) throw new Error('Preview the configuration before applying it.');
@@ -157,7 +159,7 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
           if (message.unset.includes('presence.assets.large_image') && layer.presence?.assets) delete layer.presence.assets.large_image;
         }
       } else {
-        if (!Array.isArray(message.keys) || message.keys.some(key => !['enabled', 'customPrompt', 'maxLength', 'model', 'service', 'provider', 'baseUrl', 'apiKeyEnv', 'presence', 'presets'].includes(key))) throw new Error('Invalid reset keys');
+        if (!Array.isArray(message.keys) || message.keys.some(key => !['enabled', 'summaryTriggers', 'customPrompt', 'maxLength', 'model', 'service', 'provider', 'baseUrl', 'apiKeyEnv', 'presence', 'presets'].includes(key))) throw new Error('Invalid reset keys');
         layer = {...before}; for (const key of message.keys) delete layer[key];
       }
       await saveSettings(agent ? {...config, agents: {...config.agents, [agent]: layer}} : {...layer, ...(config.agents ? {agents: config.agents} : {})});
