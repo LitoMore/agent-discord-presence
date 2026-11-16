@@ -193,7 +193,11 @@ func (a *nativeApp) sidebar(c *ui.Context) {
 			dot(c, color)
 			muted(c, a.t(label))
 		})
-		ui.ButtonBase(c.Key("preferences")).Label(a.t("Preferences")).Padding(9, 8).Gap(7).Radius(6).Children(func() {
+		preferences := ui.ButtonBase(c.Key("preferences")).Label(a.t("Preferences")).Padding(9, 8).Gap(7).Radius(6)
+		if preferences.Hovered() {
+			preferences.Background(t.SurfaceHover)
+		}
+		preferences.Children(func() {
 			ui.Icon(c, icons["Preferences"]).Size(16, 16)
 			ui.Text(c, a.t("Preferences")).FontSize(11).Grow(1)
 			muted(c, "v0.0.3")
