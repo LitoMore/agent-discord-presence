@@ -101,9 +101,7 @@ func TestChineseSelectionsKeepStableConfigurationValues(t *testing.T) {
 	if a.edit.Type != "Listening" || !a.edit.Dirty {
 		t.Fatalf("localized type was stored in the editor: %+v", a.edit)
 	}
-	if err := tt.Click("保存更改"); err != nil {
-		t.Fatal(err)
-	}
+	tt.Key(ui.Cmd, ui.KeyS)
 	patch := requested["patch"].(map[string]any)
 	if requested["scope"] != "global" || patch["presence"].(map[string]any)["type"] != 2 {
 		t.Fatalf("localized type changed the protocol: %#v", requested)

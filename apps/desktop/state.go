@@ -141,6 +141,7 @@ type preferences struct {
 	Theme        string `json:"theme"`
 	PreviewTheme string `json:"previewTheme"`
 }
+type presenceButton struct{ Label, URL string }
 type editor struct {
 	Scope, Page                                  string
 	Base                                         settings
@@ -149,6 +150,8 @@ type editor struct {
 	Enabled                                      bool
 	Model, BaseURL, KeyEnv, Prompt               string
 	Length                                       float64
+	Buttons                                      []presenceButton
+	ButtonsDirty                                 bool
 }
 
 type nativeApp struct {
@@ -621,6 +624,13 @@ func (a *nativeApp) editor() *editor {
 		source = "Custom compatible service"
 	}
 	a.edit = &editor{Scope: id, Page: a.page, Base: base, Name: textValue(p["name"], "{topic}"), Details: details, Subtitle: subtitle, Type: kind, Image: textValue(assets["large_image"], ""), Timer: timer, ShowImage: showImage, Enabled: base.Enabled, Source: source, Model: base.Model, BaseURL: base.BaseURL, KeyEnv: base.APIKeyEnv, Prompt: base.CustomPrompt, Length: float64(base.MaxLength)}
+	if buttons, ok := p["buttons"].([]any); ok {
+		for _, value := range buttons {
+			if button, ok := value.(map[string]any); ok {
+				a.edit.Buttons = append(a.edit.Buttons, presenceButton{Label: textValue(button["label"], ""), URL: textValue(button["url"], "")})
+			}
+		}
+	}
 	return a.edit
 }
 func (e *editor) presence() map[string]any {
@@ -653,7 +663,26 @@ func (e *editor) presence() map[string]any {
 		delete(assets, "large_image")
 		p["assets"] = assets
 	}
+	if e.ButtonsDirty {
+		buttons := make([]any, 0, len(e.Buttons))
+		for _, button := range e.Buttons {
+			buttons = append(buttons, map[string]any{"label": button.Label, "url": button.URL})
+		}
+		p["buttons"] = buttons
+	}
 	return p
+}
+func (e *editor) buttonsError() string {
+	for _, button := range e.Buttons {
+		if strings.TrimSpace(button.Label) == "" || len([]rune(button.Label)) > 32 || strings.ContainsFunc(button.Label, func(r rune) bool { return r < 32 || r == 127 }) {
+			return "Button text must contain 1–32 characters without control characters."
+		}
+		u, err := url.Parse(button.URL)
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || len([]rune(button.URL)) > 2048 || strings.ContainsFunc(button.URL, func(r rune) bool { return r <= 32 || r == 127 }) {
+			return "Button links must use a valid HTTPS URL without credentials."
+		}
+	}
+	return ""
 }
 func (a *nativeApp) saveEditor() {
 	e := a.edit
@@ -664,6 +693,10 @@ func (a *nativeApp) saveEditor() {
 	if a.page == "Appearance" {
 		if strings.TrimSpace(e.Name) == "" {
 			a.err = "Activity name cannot be empty."
+			return
+		}
+		if message := e.buttonsError(); message != "" {
+			a.err = message
 			return
 		}
 		patch = map[string]any{"presence": e.presence()}

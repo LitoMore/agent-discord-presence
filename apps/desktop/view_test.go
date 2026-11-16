@@ -62,9 +62,7 @@ func TestNativeNavigationPinAndScopedForms(t *testing.T) {
 	if !tt.HasText("Codex · Native preview") {
 		t.Fatal("unsaved appearance did not update the profile preview")
 	}
-	if err := tt.Click("Save changes"); err != nil {
-		t.Fatal(err)
-	}
+	tt.Key(ui.Cmd, ui.KeyS)
 	last := requests[len(requests)-1]
 	if last["action"] != "save" || last["scope"] != "global" {
 		t.Fatalf("save request: %#v", last)

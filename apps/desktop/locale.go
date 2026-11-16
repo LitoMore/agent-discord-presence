@@ -14,6 +14,19 @@ const (
 // English source messages are the fallback for missing or unsupported translations.
 // Keep protocol values, user content, and published Discord activity out of this catalog.
 var chineseMessages = map[string]string{
+	"Profile buttons": "资料卡按钮",
+	"Up to 2":         "最多 2 个",
+	"Buttons are visible to other users on Discord. You cannot see them on your own profile.":   "按钮仅对 Discord 中的其他用户可见，查看自己的资料卡时不会显示。",
+	"Button text supports {agent}, {topic}, {subtitle}, {phase}, and {state}. Links use HTTPS.": "按钮文字支持 {agent}、{topic}、{subtitle}、{phase} 和 {state}。链接须使用 HTTPS。",
+	"Button %d":        "按钮 %d",
+	"Button %d text":   "按钮 %d 文字",
+	"Button %d URL":    "按钮 %d 链接",
+	"Remove":           "移除",
+	"Remove button %d": "移除按钮 %d",
+	"Add button":       "添加按钮",
+	"View project":     "查看项目",
+	"Button text must contain 1–32 characters without control characters.":                        "按钮文字须包含 1–32 个字符，且不能含有控制字符。",
+	"Button links must use a valid HTTPS URL without credentials.":                                "按钮链接须为有效的 HTTPS 地址，且不能包含用户名或密码。",
 	"Summary scenario is missing events: %s.":                                                     "摘要场景缺少以下事件：%s。",
 	"Tool-call summaries are not supported by this adapter.":                                      "此适配器暂不支持工具调用摘要。",
 	"When should Presence update?":                                                                "何时更新 Presence？",

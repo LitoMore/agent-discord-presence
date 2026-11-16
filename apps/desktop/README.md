@@ -60,4 +60,6 @@ prototypes/                Original interface exploration
 
 The backend remains the source of truth. Settings save only on request, invalid configuration files remain untouched, and reset actions preserve unrelated settings. Forms support global and individual agent scopes. The live preview shows the daemon's rendered activity; unsaved appearance changes render locally and are labeled as a preview.
 
+**Appearance → Profile buttons** adds up to two buttons with text (up to 32 characters, including supported templates) and an HTTPS link. Buttons support global and per-agent settings, update the draft preview, and publish after saving. Removing all buttons explicitly hides inherited buttons; **Inherit global** restores the agent's inherited appearance. Discord only shows these buttons to other users, so use another account or ask a friend to check the published profile.
+
 Discord supplies the account name and avatar through its existing RPC handshake, so no account token is needed. Profile customization and asset keys can render differently in the actual Discord client. Application language and theme preferences are stored separately in `appearance.json` in the desktop app's user-data directory.

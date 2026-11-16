@@ -473,6 +473,35 @@ func (a *nativeApp) appearanceForm(c *ui.Context, e *editor) {
 		e.Dirty = true
 		a.loadImage(e.Image)
 	}
+	ui.Column(c).Gap(8).Margin(12, 0, 0, 0).Children(func() {
+		heading(c, a.t("Profile buttons"), a.t("Up to 2"))
+		muted(c, a.t("Buttons are visible to other users on Discord. You cannot see them on your own profile."))
+		muted(c, a.t("Button text supports {agent}, {topic}, {subtitle}, {phase}, and {state}. Links use HTTPS."))
+		for i := range e.Buttons {
+			ui.Column(c.Key(fmt.Sprintf("presence-button-%d", i))).Padding(12).Radius(6).Border(1, c.Theme().Border).Children(func() {
+				ui.Row(c).Margin(0, 0, 12, 0).Children(func() {
+					ui.Text(c, a.t("Button %d", i+1)).FontSize(12).Grow(1)
+					ui.Button(c, a.t("Remove")).Label(a.t("Remove button %d", i+1)).FontSize(11).OnClick(func() {
+						e.Buttons = append(e.Buttons[:i], e.Buttons[i+1:]...)
+						e.ButtonsDirty, e.Dirty = true, true
+					})
+				})
+				if a.field(c, a.t("Button %d text", i+1), &e.Buttons[i].Label, "View project", "", 32) {
+					e.ButtonsDirty, e.Dirty = true, true
+				}
+				if a.field(c, a.t("Button %d URL", i+1), &e.Buttons[i].URL, "https://example.com", "", 2048) {
+					e.ButtonsDirty, e.Dirty = true, true
+				}
+			})
+		}
+		if message := e.buttonsError(); message != "" {
+			ui.Text(c, a.t(message)).FontSize(11).TextColor(c.Theme().Danger).Role(ui.RoleAlert)
+		}
+		ui.Button(c, a.t("Add button")).Disabled(len(e.Buttons) >= 2).OnClick(func() {
+			e.Buttons = append(e.Buttons, presenceButton{})
+			e.ButtonsDirty, e.Dirty = true, true
+		})
+	})
 }
 func (a *nativeApp) summaryForm(c *ui.Context, e *editor) {
 	if ui.Checkbox(c, &e.Enabled, a.t("Generate summaries automatically")).Margin(0, 0, 24, 0).Changed() {
