@@ -29,29 +29,59 @@ export async function desktopSnapshot(): Promise<DesktopSnapshot> {
     agentSettings: Object.fromEntries(agents.map(agent => [agent, resolveSettings(configuration, agent)])) as DesktopSnapshot['agentSettings'],
     configPath: settingsPath(), socketPath: socketPath(), version: '0.0.3'};
 }
-function adapterInstructions(agent: Agent): Omit<IntegrationInstructions, 'prompt'> {
+function adapterInstructions(agent: Agent, chinese: boolean): Omit<IntegrationInstructions, 'prompt'> {
   if (!agents.includes(agent)) throw new Error('Unknown agent');
   if (agent === 'codex' || agent === 'claude-code') {
     if (process.platform === 'win32') throw new Error('On Windows, install the CLI on PATH and use the bundled agent plugin hooks. See USAGE.md for setup.');
     const command = `${quote(process.execPath)} ${quote(cli)}`;
     return {agent, path: join(homedir(), agent === 'codex' ? '.codex/hooks.json' : '.claude/settings.json'),
       content: JSON.stringify(hookConfig(agent, command), null, 2),
-      instructions: agent === 'codex' ? 'Merge these hooks into your configuration, preserving existing hooks. Review and trust them in Codex /hooks, then start a new session.' : 'Merge these hooks into your configuration, preserving existing settings, then restart Claude Code.'};
+      instructions: agent === 'codex'
+        ? chinese ? '将这些钩子合并到配置中，保留现有钩子。在 Codex /hooks 中检查并信任它们，然后开始新会话。' : 'Merge these hooks into your configuration, preserving existing hooks. Review and trust them in Codex /hooks, then start a new session.'
+        : chinese ? '将这些钩子合并到配置中，保留现有设置，然后重启 Claude Code。' : 'Merge these hooks into your configuration, preserving existing settings, then restart Claude Code.'};
   }
   if (agent === 'opencode' || agent === 'pi') {
     const source = new URL(`./adapters/${agent}.js`, import.meta.url).href;
     return {agent, path: agent === 'pi' ? join(homedir(), '.pi/agent/extensions/agent-presence.ts') : join(homedir(), '.config/opencode/plugins/agent-presence.ts'),
       content: agent === 'pi' ? `export { default } from ${JSON.stringify(source)};` : `export { AgentPresence } from ${JSON.stringify(source)};`,
-      instructions: 'Save this content to the plugin file, then reload extensions or restart your agent.'};
+      instructions: chinese ? '将此内容保存到插件文件，然后重新加载扩展或重启智能体。' : 'Save this content to the plugin file, then reload extensions or restart your agent.'};
   }
   const root = fileURLToPath(new URL('../', import.meta.url));
   return {agent, path: '', content: `dsh plugin --profile web add ${quote(root)}`,
-    instructions: 'Run this command in your terminal, replacing web with your Harness profile, then restart Harness.'};
+    instructions: chinese ? '在终端中运行此命令，将 web 替换为你的 Harness 配置名称，然后重启 Harness。' : 'Run this command in your terminal, replacing web with your Harness profile, then restart Harness.'};
 }
-export function integrationInstructions(agent: Agent): IntegrationInstructions {
-  const setup = adapterInstructions(agent);
+export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' = 'en'): IntegrationInstructions {
+  const chinese = language === 'zh-CN';
+  const setup = adapterInstructions(agent, chinese);
   const root = fileURLToPath(new URL('../', import.meta.url));
-  const prompt = [
+  const prompt = (chinese ? [
+    `请在这台电脑上为 ${labels[agent]} 配置 Agent Discord Presence。`,
+    '',
+    '请使用 Presence 桌面应用附带的现有本地安装：',
+    `- 软件包目录：${JSON.stringify(root)}`,
+    `- Node.js 可执行文件：${JSON.stringify(process.execPath)}`,
+    `- CLI 入口：${JSON.stringify(cli)}`,
+    `- README：${JSON.stringify(join(root, 'README.md'))}`,
+    `- 配置指南：${JSON.stringify(join(root, 'USAGE.md'))}`,
+    `- Presence 配置文件：${JSON.stringify(settingsPath())}`,
+    `- 服务套接字：${JSON.stringify(socketPath())}`,
+    '',
+    '阅读本地 README 和配置指南，检查 Node.js 22+ 和 Discord 桌面客户端。复用这份安装，无需另行下载或重新构建桌面应用。',
+    '',
+    `只配置 ${labels[agent]}。先检查其现有配置，备份所有需要修改的文件，保留现有设置、钩子、插件和扩展，并避免重复集成。`,
+    ...(setup.path ? [`目标配置文件：${JSON.stringify(setup.path)}`] : []),
+    setup.instructions,
+    ...(agent === 'deepseek-harness' ? ['确定我使用的 Harness 配置名称，并将下方命令中的 web 替换为该名称。'] : []),
+    '',
+    `以下${agent === 'deepseek-harness' ? '安装命令' : '配置'}可作为集成参考：`,
+    '```' + (agent === 'codex' || agent === 'claude-code' ? 'json' : agent === 'deepseek-harness' ? 'sh' : 'ts'),
+    setup.content,
+    '```',
+    '',
+    '使用上面的 Node.js 可执行文件和 CLI 入口检查服务状态。复用正在运行的服务；如果服务已停止，则使用 start --background 参数在后台启动。运行这些命令时，通过 ADP_CONFIG 和 AGENT_PRESENCE_SOCKET 指定上面列出的 Presence 配置文件和套接字路径，并确保智能体集成连接到同一个套接字。',
+    '',
+    '验证服务和 Discord 连接，然后用中文总结修改的文件和执行的检查。如果还需要打开 Discord、信任 Codex 钩子、重新加载扩展、重启智能体或开始新会话才能显示活动，请告诉我。',
+  ] : [
     `Set up Agent Discord Presence for ${labels[agent]} on this computer.`,
     '',
     'Use the existing local installation that ships with the Presence desktop app:',
@@ -78,7 +108,7 @@ export function integrationInstructions(agent: Agent): IntegrationInstructions {
     'Use the Node.js executable and CLI entry point above to check service status. Reuse a running service, or start it in the background with the start --background arguments if it is stopped. Use the listed presence configuration and socket paths (ADP_CONFIG and AGENT_PRESENCE_SOCKET) for these commands, and ensure the agent integration reaches the same socket.',
     '',
     'Verify the service and Discord connection, then summarize the files changed and the checks performed. Tell me if I still need to open Discord, trust Codex hooks, reload extensions, restart the agent, or begin a new session before activity can appear.',
-  ].join('\n');
+  ]).join('\n');
   return {...setup, prompt};
 }
 /** Commands are serialized by the worker; read the latest file before every patch. */
@@ -86,7 +116,7 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected desktop request');
     const message = value as DesktopRequest;
-    if (message.action === 'integration') return {ok: true, integration: integrationInstructions(message.agent)};
+    if (message.action === 'integration') return {ok: true, integration: integrationInstructions(message.agent, message.language)};
     if (message.action === 'start') {
       try { await request({type: 'status'}, undefined, 1500); }
       catch (error) {

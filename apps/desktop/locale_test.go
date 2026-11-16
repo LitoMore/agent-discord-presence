@@ -124,18 +124,39 @@ func TestChineseSelectionsKeepStableConfigurationValues(t *testing.T) {
 	}
 }
 
-func TestChineseSetupDialogPreservesClipboardContent(t *testing.T) {
+func TestSetupRequestsUseInterfaceLanguage(t *testing.T) {
+	for _, language := range []string{languageEnglish, languageChinese} {
+		t.Run(language, func(t *testing.T) {
+			a := fixtureApp()
+			a.prefs.Language = language
+			a.page = "Agents"
+			var requested map[string]any
+			a.dispatch = func(request map[string]any, _ string) { requested = request }
+			tt := ui.NewTester(a.view, 1120, 820)
+			for _, agent := range agentIDs {
+				if err := tt.Click(a.t("Set up %s", agentLabels[agent])); err != nil {
+					t.Fatal(err)
+				}
+				if requested["action"] != "integration" || requested["agent"] != agent || requested["language"] != language {
+					t.Fatalf("setup request did not include the selected language: %#v", requested)
+				}
+			}
+		})
+	}
+}
+
+func TestChineseSetupDialogCopiesChinesePrompt(t *testing.T) {
 	a := fixtureApp()
 	a.prefs.Language = languageChinese
 	a.page = "Agents"
-	a.setup = &integration{Agent: "codex", Content: `{"hooks":{}}`, Prompt: "Set up Agent Discord Presence, preserving my existing hooks."}
+	a.setup = &integration{Agent: "codex", Content: `{"hooks":{}}`, Prompt: "请在这台电脑上为 Codex 配置 Agent Discord Presence，保留现有设置和钩子。"}
 	a.setupOpen = true
 	tt := ui.NewTester(a.view, 1120, 820)
 	if err := tt.Click("复制提示词"); err != nil {
 		t.Fatal(err)
 	}
 	if tt.Clipboard() != a.setup.Prompt || !tt.HasText("已复制到剪贴板。") {
-		t.Fatal("localized dialog changed the setup prompt or lost copy feedback")
+		t.Fatal("localized dialog did not copy the Chinese setup prompt or lost copy feedback")
 	}
 	if err := tt.Click("手动配置"); err != nil {
 		t.Fatal(err)

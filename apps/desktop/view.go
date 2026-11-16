@@ -361,7 +361,9 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 				}
 				muted(c, a.t(label))
 			})
-			ui.Button(c.Key("setup-"+id), a.t("Setup")).Label(a.t("Set up %s", agentLabels[id])).FontSize(11).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "integration", "agent": id}, "") })
+			ui.Button(c.Key("setup-"+id), a.t("Setup")).Label(a.t("Set up %s", agentLabels[id])).FontSize(11).Disabled(a.busy).OnClick(func() {
+				a.dispatch(map[string]any{"action": "integration", "agent": id, "language": a.prefs.Language}, "")
+			})
 		})
 	}
 	ui.Column(c).Padding(15).Gap(5).Background(t.Surface).Radius(7).Margin(24, 0, 20, 0).Children(func() {

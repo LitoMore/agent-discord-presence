@@ -24,6 +24,6 @@ export type DesktopRequest =
   | {action: 'pin'; key: string | null}
   | {action: 'save'; scope: SettingsScope; patch: SettingsLayer; unset?: ('presence.assets.large_image')[]}
   | {action: 'reset'; scope: SettingsScope; keys: (keyof SettingsLayer)[]}
-  | {action: 'integration'; agent: Agent};
+  | {action: 'integration'; agent: Agent; language?: 'en' | 'zh-CN'};
 export interface IntegrationInstructions {agent: Agent; path: string; content: string; instructions: string; prompt: string}
 export type DesktopResponse = {ok: true; snapshot?: DesktopSnapshot; integration?: IntegrationInstructions} | {ok: false; error: string};

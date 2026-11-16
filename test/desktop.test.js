@@ -71,6 +71,32 @@ test('desktop returns installation-specific adapter instructions without changin
   assert.throws(()=>integrationInstructions('unknown'));
 });
 
+test('desktop localizes setup prompts for every agent without changing integration code or paths',async()=>{
+  for(const agent of ['codex','claude-code','opencode','pi','deepseek-harness']){
+    const english=integrationInstructions(agent);
+    assert.deepEqual(integrationInstructions(agent,'en'),english);
+    const response=await handleDesktopRequest({action:'integration',agent,language:'zh-CN'});
+    assert.equal(response.ok,true);
+    const chinese=response.integration;
+    assert.equal(chinese.path,english.path);
+    assert.equal(chinese.content,english.content);
+    assert.ok(chinese.prompt.includes(chinese.content));
+    assert.ok(chinese.prompt.includes(chinese.instructions));
+    if(chinese.path)assert.ok(chinese.prompt.includes(JSON.stringify(chinese.path)));
+    assert.match(chinese.prompt,/请在这台电脑上为/);
+    assert.match(chinese.prompt,/备份所有需要修改的文件，保留现有设置、钩子、插件和扩展，并避免重复集成/);
+    assert.match(chinese.prompt,/验证服务和 Discord 连接，然后用中文总结/);
+    assert.match(chinese.prompt,/start --background/);
+    assert.match(chinese.prompt,/ADP_CONFIG 和 AGENT_PRESENCE_SOCKET/);
+    assert.match(chinese.prompt,/Node\.js 22\+/);
+    assert.match(chinese.prompt,/dist[\\/]cli\.js/);
+    assert.match(chinese.prompt,/USAGE\.md/);
+    assert.notEqual(chinese.instructions,english.instructions);
+    if(agent==='codex')assert.match(chinese.prompt,/Codex \/hooks/);
+    if(agent==='deepseek-harness')assert.match(chinese.prompt,/将下方命令中的 web 替换为该名称/);
+  }
+});
+
 test('stdio bridge reports malformed messages and continues serving subsequent requests',async()=>{
   const child=spawn(process.execPath,['dist/desktop-bridge.js'],{stdio:'pipe'});
   let output='';let errors='';child.stdout.on('data',data=>output+=data);child.stderr.on('data',data=>errors+=data);
