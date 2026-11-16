@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -142,6 +143,7 @@ func (a *nativeApp) view(c *ui.Context) {
 		})
 	})
 	a.setupDialog(c)
+	a.removalDialog(c)
 	if c.Shortcut(ui.Cmd, ui.KeyS) {
 		a.saveEditor()
 	}
@@ -382,6 +384,11 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 			ui.Button(c.Key("setup-"+id), a.t("Setup")).Label(a.t("Set up %s", agentLabels[id])).FontSize(11).Disabled(a.busy).OnClick(func() {
 				a.dispatch(map[string]any{"action": "integration", "agent": id, "language": a.prefs.Language}, "")
 			})
+			ui.Button(c.Key("manage-"+id), "⋯").Label(a.t("Manage %s integration", agentLabels[id])).Disabled(a.busy).Menu(func(m *ui.Menu) {
+				if m.Item(a.t("Remove integration…")).Danger().Chosen() {
+					a.dispatch(map[string]any{"action": "uninstall-preview", "agent": id}, "")
+				}
+			})
 		})
 	}
 	ui.Column(c).Padding(15).Gap(5).Background(t.Surface).Radius(7).Margin(24, 0, 20, 0).Children(func() {
@@ -606,6 +613,73 @@ func (a *nativeApp) setupDialog(c *ui.Context) {
 		})
 	})
 }
+func (a *nativeApp) removalDialog(c *ui.Context) {
+	if a.removal == nil {
+		return
+	}
+	p := a.removal
+	done := a.removalResult != nil && a.removalResult.Removed
+	ui.Modal(c, &a.removalOpen, func() {
+		ui.Column(c).Width(560).MaxWidthPercent(100).Gap(14).Children(func() {
+			ui.Text(c, a.t("Remove %s integration", agentLabels[p.Agent])).FontSize(19).FontWeight(600)
+			if p.Kind != "managed" && !done {
+				ui.Text(c, a.t("Integration file")).FontSize(12)
+				ui.TextInput(c.Key("removal-path"), &a.removalPath).Label(a.t("Integration file")).FillWidth().Disabled(a.busy)
+				muted(c, a.t("For project or custom configuration, enter its exact file path and preview again."))
+			} else if p.Path != "" {
+				ui.Text(c, p.Path).Font("monospace").FontSize(11).Selectable()
+			}
+			if done {
+				label := "Integration removed."
+				if p.ManualReview {
+					label = "Recognized hooks removed. Manual review is still required."
+				}
+				ui.Text(c, a.t(label)).TextColor(c.Theme().Success).Role(ui.RoleStatus)
+				ui.Text(c, a.t("Backup: %s", a.removalResult.Backup)).FontSize(11).Selectable()
+				ui.Text(c, a.t("Reload extensions or restart the agent / start a new session to finish. Existing activity may remain until the session ends or expires.")).FontSize(12)
+			} else {
+				if p.Status == "ready" {
+					label := "Remove %d Presence hook command(s)."
+					if p.Kind == "entry" {
+						label = "Remove %d Presence entry file."
+					}
+					ui.Text(c, a.t(label, p.Count)).FontSize(12)
+					details := strings.Join(p.Details, "\n")
+					ui.TextArea(c.Key("removal-details"), &details).Label(a.t("Removal preview")).ReadOnly(true).Height(140).Font("monospace").FontSize(11)
+					muted(c, a.t("A backup will be created before removal. Other hooks and settings will be preserved."))
+				} else if p.Status == "not-found" {
+					ui.Text(c, a.t("No integration found.")).FontSize(12)
+				} else {
+					ui.Text(c, a.t("Manual removal required.")).FontSize(12)
+				}
+			}
+			if !done || p.ManualReview {
+				ui.Text(c, a.t(p.Note)).FontSize(12)
+			}
+			if a.removalError != "" {
+				ui.Text(c, a.t(a.removalError)).TextColor(c.Theme().Danger).FontSize(12).Role(ui.RoleAlert)
+			}
+			ui.Row(c.Key("removal-actions")).Gap(10).Justify(ui.End).Children(func() {
+				label := "Cancel"
+				if done || p.Status != "ready" {
+					label = "Close"
+				}
+				ui.Button(c, a.t(label)).Disabled(a.busy).OnClick(func() { a.removalOpen = false })
+				if p.Kind != "managed" && !done {
+					ui.Button(c, a.t("Preview again")).Disabled(a.busy || strings.TrimSpace(a.removalPath) == "").OnClick(func() {
+						a.dispatch(map[string]any{"action": "uninstall-preview", "agent": p.Agent, "path": a.removalPath}, "")
+					})
+				}
+				if p.Status == "ready" && !done {
+					ui.Button(c, a.t("Remove integration")).TextColor(c.Theme().Danger).Disabled(a.busy || a.removalPath != p.Path).OnClick(func() {
+						a.dispatch(map[string]any{"action": "uninstall", "agent": p.Agent, "path": p.Path, "revision": p.Revision}, "")
+					})
+				}
+			})
+		})
+	})
+}
+
 func (a *nativeApp) preview() (*activity, *session, bool) {
 	s := a.selected()
 	if !a.running() {

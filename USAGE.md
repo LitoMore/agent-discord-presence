@@ -8,6 +8,7 @@
 - [Images and display settings](#images-and-display-settings)
 - [Presence layout and manual summaries](#summary-title-layout)
 - [Connect your agents](#connect-your-agents)
+- [Remove an agent integration](#remove-an-agent-integration)
 - [Session selection](#session-selection-and-lifecycle)
 - [Configuration and platforms](#configuration-and-platform-notes)
 - [Development](#development)
@@ -417,6 +418,36 @@ Automatic summaries use the default `session` service: the plugin calls Harness�
 Native summaries run one at a time per plugin instance with a bounded queue and a 60-second deadline. New work, errors, agent disposal, and plugin unload cancel obsolete work. The daemon rejects results after session changes, manual summary edits, or summary configuration changes. Disabling automatic summaries preserves lifecycle presence. Native calls do not contribute to the daemon CLI worker counters.
 
 The adapter contract was checked against official Harness commit `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`; lifecycle integration tests use a simulated host and local daemon, not a live Harness/Discord connection. See the [official bundle installation contract](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/docs/user/develop/basic/publish.md).
+
+## Remove an agent integration
+
+Remove Presence hooks, plugins, or extensions with the CLI:
+
+```sh
+adp uninstall codex --dry-run
+adp uninstall codex
+adp uninstall claude-code
+adp uninstall opencode
+adp uninstall pi
+```
+
+By default, these commands inspect the user-level files listed in the setup instructions above. To remove a project-level integration or use a custom location, specify the exact file:
+
+```sh
+adp uninstall codex --path .codex/hooks.json --dry-run
+adp uninstall codex --path .codex/hooks.json
+adp uninstall opencode --path .opencode/plugins/agent-presence.ts
+```
+
+`--dry-run` lists the recognized commands or entry file without writing anything. Removal creates a private, byte-for-byte backup next to the original file (`FILE.adp-backup-UUID.bak`) and prints its path. Hook removal preserves unrelated settings and other hooks, including hooks sharing the same event or matcher group. The hook file must be valid JSON; unsupported or invalid configurations are left for manual review. OpenCode and Pi entry files are deleted only when their entire content is a recognized Presence export; files containing custom code are left untouched. Repeating removal when nothing is installed succeeds without creating another backup.
+
+Automatic recognition covers `adp hook AGENT`, `agent-discord-presence hook AGENT`, and hooks generated for the current CLI installation, including `ADP_CONFIG` and `AGENT_PRESENCE_SOCKET` assignment prefixes and an optional `env` launcher. Hooks and entry exports referencing another checkout, npm installation, or desktop app bundle are also recognized when that installation's package metadata and target file verify its identity. Detection never executes the referenced code. Package exports `agent-discord-presence/opencode` and `agent-discord-presence/pi` are supported too. Shell wrappers, missing or unverifiable installations, and modified commands require manual review. If recognized hooks coexist with possible unrecognized Presence hooks, the recognized hooks are removed and the output asks you to review the rest. A configuration that can only be handled manually exits with status 1.
+
+In the desktop app, open **Agents → ⋯ → Remove integration…** for an agent. Review the file path and removal preview, then confirm **Remove integration**. You can enter a project or custom path and choose **Preview again** before confirming. The app checks that the file still matches the preview, displays any error in the dialog, and shows the backup path after removal. **No sessions detected** does not indicate whether an integration is installed.
+
+For DeepSeek Harness, remove Presence through Harness's plugin manager in the profile where you installed it; the desktop dialog and `adp uninstall deepseek-harness` provide this guidance. Integrations loaded through Codex/Claude Code plugin managers or command-line plugin options also need to be removed through their original installation mechanism; the command edits hook configuration, not plugin registrations. Stop passing `--plugin-dir` to Claude Code or `-e` to Pi for one-off loads.
+
+Reload extensions, restart the agent, or begin a new session after removal. Existing activity may remain until its session ends or expires. Removal preserves Presence preferences and leaves the shared service running for your other agents.
 
 ## Session selection and lifecycle
 

@@ -85,11 +85,24 @@ type snapshot struct {
 	ConfigPath, SocketPath, Version  string
 }
 type integration struct{ Agent, Path, Content, Instructions, Prompt string }
+type uninstallPlan struct {
+	Agent, Path, Status, Kind, Revision, Note string
+	Count                                     int
+	Details                                   []string
+	ManualReview                              bool
+}
+type uninstallResult struct {
+	Plan    uninstallPlan
+	Removed bool
+	Backup  string
+}
 type desktopResponse struct {
-	OK          bool
-	Error       string
-	Snapshot    *snapshot
-	Integration *integration
+	OK              bool
+	Error           string
+	Snapshot        *snapshot
+	Integration     *integration
+	UninstallPlan   *uninstallPlan
+	UninstallResult *uninstallResult
 }
 type recentEvent struct {
 	Text         string
@@ -126,6 +139,11 @@ type nativeApp struct {
 	setupMode        int
 	setupCopiedUntil time.Time
 	setupCopyError   string
+	removal          *uninstallPlan
+	removalResult    *uninstallResult
+	removalOpen      bool
+	removalPath      string
+	removalError     string
 	images           map[string]*ui.Bitmap
 	imagePending     map[string]bool
 	live             bool
@@ -218,6 +236,10 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 	a.busy = true
 	a.err = ""
 	a.notice = ""
+	removing := request["action"] == "uninstall" || request["action"] == "uninstall-preview"
+	if removing {
+		a.removalError = ""
+	}
 	go func() {
 		result, err := a.call(context.Background(), request)
 		if a.closed.Load() {
@@ -230,6 +252,9 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 			a.busy = false
 			if err != nil {
 				a.err = err.Error()
+				if removing {
+					a.removalError = err.Error()
+				}
 			} else {
 				a.accept(result)
 				a.notice = notice
@@ -244,6 +269,19 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 	}()
 }
 func (a *nativeApp) accept(response *desktopResponse) {
+	if response.UninstallPlan != nil {
+		a.removalError = ""
+		a.removal = response.UninstallPlan
+		a.removalPath = response.UninstallPlan.Path
+		a.removalResult = nil
+		a.removalOpen = true
+	}
+	if response.UninstallResult != nil {
+		a.removalError = ""
+		a.removalResult = response.UninstallResult
+		a.removal = &response.UninstallResult.Plan
+		a.removalOpen = true
+	}
 	if response.Integration != nil {
 		a.setup = response.Integration
 		a.setupOpen = true

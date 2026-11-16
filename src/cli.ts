@@ -16,6 +16,8 @@ const help = `agent-discord-presence
   unpin                     Resume automatic selection
   config codex|claude-code  Print hook JSON using this checkout's CLI
   config opencode|pi        Print a local plugin/extension entry file
+  uninstall AGENT           Remove Presence hooks or a plugin/extension entry
+  uninstall AGENT --dry-run Preview removal without changing any files
   hook codex|claude-code    Receive a lifecycle hook on stdin
   prompt [PRESET]           Print the default prompt, preferences, and output schema
   preset list              List available configuration presets
@@ -27,7 +29,7 @@ const help = `agent-discord-presence
   config set KEY VALUE     Save summary, model, or presence settings
   config unset KEY         Restore a setting to its default
 
-Options: --agent NAME (config show/set/unset, preset apply), --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
+Options: --path FILE (uninstall: project/custom integration file), --agent NAME (config show/set/unset, preset apply), --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
 Environment: DISCORD_CLIENT_ID, AGENT_PRESENCE_SOCKET, DISCORD_IPC_PATH, ADP_CONFIG
 `;
 async function main() {
@@ -36,6 +38,7 @@ async function main() {
     'stale-minutes': {type: 'string'}, help: {type: 'boolean', short: 'h'},
     background: {type: 'boolean', short: 'b'},
     agent: {type: 'string'},
+    path: {type: 'string'},
   }});
   const [command, argument] = positionals;
   const agent = values.agent as Agent | undefined;
@@ -43,6 +46,25 @@ async function main() {
   if (values.socket) process.env.AGENT_PRESENCE_SOCKET = values.socket;
   if (!command || values.help) { console.log(help); return; }
   if (values.background && command !== 'start') throw new Error('--background is only available for start');
+  if (values.path !== undefined && command !== 'uninstall') throw new Error('--path is only available for uninstall');
+  if (command === 'uninstall') {
+    if (!agents.includes(argument as Agent) || positionals.length !== 2) throw new Error('Use uninstall codex|claude-code|opencode|pi|deepseek-harness [--dry-run] [--path FILE]');
+    const {planUninstall, uninstallIntegration} = await import('./uninstall.js');
+    const result = values['dry-run']
+      ? {plan: await planUninstall(argument as Agent, values.path), removed: false}
+      : await uninstallIntegration(argument as Agent, values.path);
+    const {plan} = result;
+    if (plan.path) console.log(`File: ${plan.path}`);
+    if (plan.status === 'ready') {
+      console.log(`${result.removed ? 'Removed' : 'Would remove'} ${plan.count} Presence ${plan.kind === 'hooks' ? 'hook command(s)' : 'entry file'}.`);
+      for (const detail of plan.details) console.log(`  ${detail}`);
+      if ('backup' in result && result.backup) console.log(`Backup: ${result.backup}`);
+      if (result.removed) console.log('Reload extensions or restart the agent / start a new session to finish removing the integration. Existing activity may remain until the session ends or expires.');
+    }
+    console.log(plan.note);
+    if (plan.status === 'manual') process.exitCode = 1;
+    return;
+  }
   if (command === 'summary' || command === 'clear-summary') {
     if (!argument || (command === 'summary' && !positionals[2])) throw new Error('Use summary AGENT:SESSION_ID TOPIC [SUBTITLE]');
     const target = await summaryTarget(argument);

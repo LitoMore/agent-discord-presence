@@ -14,7 +14,9 @@ npm run desktop:install
 npm run desktop
 ```
 
-Use **Start service** to run the local service in the background and **Stop service** to clear activity and stop it. **Agents → Setup** offers two methods: **Agent prompt** copies a ready-to-paste prompt with local installation details and instructions to preserve existing configuration; **Manual configuration** copies the hook JSON, extension entry, or installation command directly. The selected method is previewed before copying, with confirmation after a successful copy. The app does not overwrite agent configuration files.
+Use **Start service** to run the local service in the background and **Stop service** to clear activity and stop it. **Agents → Setup** offers two methods: **Agent prompt** copies a ready-to-paste prompt with local installation details and instructions to preserve existing configuration; **Manual configuration** copies the hook JSON, extension entry, or installation command directly. The selected method is previewed before copying, with confirmation after a successful copy.
+
+**Agents → ⋯ → Remove integration…** previews recognized Presence hooks or an entry file before removal. The default is the user-level integration path; enter an exact project/custom file path and use **Preview again** to change the target. Confirming creates a private backup and preserves other hooks and settings. A changed file requires a fresh preview, custom or unsupported code requires manual review, and missing integrations show an explicit empty state. Success displays the backup path and reload instructions. DeepSeek Harness shows plugin-manager removal guidance. Setup only provides instructions; removal modifies files after explicit confirmation. Both CLI and desktop share the same removal implementation.
 
 **Preferences → Language → Interface language** switches the desktop interface between **English** and **简体中文** immediately, including the tray panel and menu. English is the default. Setup prompts follow the selected interface language. The selection is remembered across restarts and does not change generated summaries or published Discord activity.
 

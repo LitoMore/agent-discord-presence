@@ -1,12 +1,12 @@
 import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
-import {homedir} from 'node:os';
 import {request, socketPath} from './client.js';
 import {startBackground} from './background.js';
 import {agents, labels, type Agent} from './protocol.js';
 import {loadSettings, saveSettings, resolveSettings, mergeSettings, settingsPath, type Configuration, type SettingsLayer} from './settings.js';
 import {hookConfig} from './adapters/hooks.js';
 import type {DesktopRequest, DesktopResponse, DesktopSnapshot, IntegrationInstructions, ServiceStatus, SettingsScope} from './desktop-protocol.js';
+import {integrationPath, planUninstall, uninstallIntegration} from './uninstall.js';
 
 const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
 const quote = (s: string) => "'" + s.replaceAll("'", "'\\''") + "'";
@@ -34,7 +34,7 @@ function adapterInstructions(agent: Agent, chinese: boolean): Omit<IntegrationIn
   if (agent === 'codex' || agent === 'claude-code') {
     if (process.platform === 'win32') throw new Error('On Windows, install the CLI on PATH and use the bundled agent plugin hooks. See USAGE.md for setup.');
     const command = `${quote(process.execPath)} ${quote(cli)}`;
-    return {agent, path: join(homedir(), agent === 'codex' ? '.codex/hooks.json' : '.claude/settings.json'),
+    return {agent, path: integrationPath(agent),
       content: JSON.stringify(hookConfig(agent, command), null, 2),
       instructions: agent === 'codex'
         ? chinese ? '将这些钩子合并到配置中，保留现有钩子。在 Codex /hooks 中检查并信任它们，然后开始新会话。' : 'Merge these hooks into your configuration, preserving existing hooks. Review and trust them in Codex /hooks, then start a new session.'
@@ -42,7 +42,7 @@ function adapterInstructions(agent: Agent, chinese: boolean): Omit<IntegrationIn
   }
   if (agent === 'opencode' || agent === 'pi') {
     const source = new URL(`./adapters/${agent}.js`, import.meta.url).href;
-    return {agent, path: agent === 'pi' ? join(homedir(), '.pi/agent/extensions/agent-presence.ts') : join(homedir(), '.config/opencode/plugins/agent-presence.ts'),
+    return {agent, path: integrationPath(agent),
       content: agent === 'pi' ? `export { default } from ${JSON.stringify(source)};` : `export { AgentPresence } from ${JSON.stringify(source)};`,
       instructions: chinese ? '将此内容保存到插件文件，然后重新加载扩展或重启智能体。' : 'Save this content to the plugin file, then reload extensions or restart your agent.'};
   }
@@ -117,6 +117,11 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected desktop request');
     const message = value as DesktopRequest;
     if (message.action === 'integration') return {ok: true, integration: integrationInstructions(message.agent, message.language)};
+    if (message.action === 'uninstall-preview') return {ok: true, uninstallPlan: await planUninstall(message.agent, message.path)};
+    if (message.action === 'uninstall') {
+      if (typeof message.revision !== 'string' || !/^[a-f0-9]{64}$/.test(message.revision)) throw new Error('Preview the integration removal before confirming it.');
+      return {ok: true, uninstallResult: await uninstallIntegration(message.agent, message.path, message.revision)};
+    }
     if (message.action === 'start') {
       try { await request({type: 'status'}, undefined, 1500); }
       catch (error) {
