@@ -103,10 +103,16 @@ func main() {
 			d.panel.Focus()
 		}
 		menu := mygo.NewMenu([]*mygo.MenuItem{
-			{Label: "Open main window", Click: func(*mygo.MenuItem, *mygo.Window) { d.OpenMain() }},
-			{Label: "Quick panel", Click: func(*mygo.MenuItem, *mygo.Window) { showPanel() }},
-			mygo.Separator(), {Role: mygo.RoleQuit, Label: "Quit Presence"},
+			{Label: a.t("Open main window"), Click: func(*mygo.MenuItem, *mygo.Window) { d.OpenMain() }},
+			{Label: a.t("Quick panel"), Click: func(*mygo.MenuItem, *mygo.Window) { showPanel() }},
+			mygo.Separator(), {Role: mygo.RoleQuit, Label: a.t("Quit Presence")},
 		})
+		a.updateTrayMenu = func() {
+			items := menu.Items()
+			items[0].SetLabel(a.t("Open main window"))
+			items[1].SetLabel(a.t("Quick panel"))
+			items[3].SetLabel(a.t("Quit Presence"))
+		}
 		if runtime.GOOS == "linux" {
 			tray.SetMenu(menu)
 		} else {

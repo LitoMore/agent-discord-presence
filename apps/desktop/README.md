@@ -16,6 +16,8 @@ npm run desktop
 
 Use **Start service** to run the local service in the background and **Stop service** to clear activity and stop it. **Agents → Setup** offers two methods: **Agent prompt** copies a ready-to-paste prompt with local installation details and instructions to preserve existing configuration; **Manual configuration** copies the hook JSON, extension entry, or installation command directly. The selected method is previewed before copying, with confirmation after a successful copy. The app does not overwrite agent configuration files.
 
+**Preferences → Language → Interface language** switches the desktop interface between **English** and **简体中文** immediately, including the tray panel and menu. English is the default. The selection is remembered across restarts and does not change generated summaries or published Discord activity.
+
 The tray icon opens the native quick panel. Its context menu opens the main window or quits the app. Closing either window hides it; quitting closes the bridge worker but leaves the independent presence service running. The macOS development app uses an ad hoc signature.
 
 ## Build and verify
@@ -50,4 +52,4 @@ prototypes/                Original interface exploration
 
 The backend remains the source of truth. Settings save only on request, invalid configuration files remain untouched, and reset actions preserve unrelated settings. Forms support global and individual agent scopes. The live preview shows the daemon's rendered activity; unsaved appearance changes render locally and are labeled as a preview.
 
-Discord supplies the account name and avatar through its existing RPC handshake, so no account token is needed. Profile customization and asset keys can render differently in the actual Discord client. Application theme preferences are stored separately in the desktop app's user-data directory.
+Discord supplies the account name and avatar through its existing RPC handshake, so no account token is needed. Profile customization and asset keys can render differently in the actual Discord client. Application language and theme preferences are stored separately in `appearance.json` in the desktop app's user-data directory.

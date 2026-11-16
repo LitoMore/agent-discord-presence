@@ -92,10 +92,12 @@ type desktopResponse struct {
 	Integration *integration
 }
 type recentEvent struct {
-	Text string
-	At   time.Time
+	Text         string
+	At           time.Time
+	Agent, State string
 }
 type preferences struct {
+	Language     string `json:"language"`
 	Theme        string `json:"theme"`
 	PreviewTheme string `json:"previewTheme"`
 }
@@ -129,12 +131,13 @@ type nativeApp struct {
 	live             bool
 	closed           atomic.Bool
 	cancel           context.CancelFunc
+	updateTrayMenu   func()
 	// Tests substitute a command runner without starting a GUI or a daemon.
 	dispatch func(map[string]any, string)
 }
 
 func newNativeApp(d *Desktop) *nativeApp {
-	a := &nativeApp{bridge: d, page: "Overview", scope: "Global · All agents", prefs: preferences{Theme: "System", PreviewTheme: "Dark"}, images: map[string]*ui.Bitmap{}, imagePending: map[string]bool{}}
+	a := &nativeApp{bridge: d, page: "Overview", scope: "Global · All agents", prefs: preferences{Language: languageEnglish, Theme: "System", PreviewTheme: "Dark"}, images: map[string]*ui.Bitmap{}, imagePending: map[string]bool{}}
 	a.dispatch = a.execute
 	return a
 }
@@ -153,16 +156,8 @@ func (a *nativeApp) start() {
 	a.live = true
 	if dir, err := mygo.App.Path(mygo.PathUserData); err == nil {
 		a.prefsPath = filepath.Join(dir, "appearance.json")
-		if data, err := os.ReadFile(a.prefsPath); err == nil {
-			_ = json.Unmarshal(data, &a.prefs)
-		}
 	}
-	if a.prefs.Theme != "System" && a.prefs.Theme != "Light" && a.prefs.Theme != "Dark" {
-		a.prefs.Theme = "System"
-	}
-	if a.prefs.PreviewTheme != "Light" {
-		a.prefs.PreviewTheme = "Dark"
-	}
+	a.loadPreferences()
 	mygo.Theme.SetSource(mygo.ThemeSource(strings.ToLower(a.prefs.Theme)))
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
@@ -264,16 +259,16 @@ func (a *nativeApp) accept(response *desktopResponse) {
 	if a.data != nil {
 		before = a.data.Status
 	}
-	var changes []string
+	var changes []recentEvent
 	if before == nil && next.Status != nil {
-		changes = append(changes, "Connected to the local service")
+		changes = append(changes, recentEvent{Text: "Connected to the local service"})
 	}
 	if before != nil && next.Status == nil {
-		changes = append(changes, "Local service stopped")
+		changes = append(changes, recentEvent{Text: "Local service stopped"})
 	}
 	if next.Status != nil {
 		if next.Status.Discord == "connected" && (before == nil || before.Discord != "connected") {
-			changes = append(changes, "Connected to Discord")
+			changes = append(changes, recentEvent{Text: "Connected to Discord"})
 		}
 		for _, s := range next.Status.Sessions {
 			found := false
@@ -286,12 +281,13 @@ func (a *nativeApp) accept(response *desktopResponse) {
 				}
 			}
 			if !found {
-				changes = append(changes, agentLabels[s.agent()]+" · "+stateLabels[s.State])
+				changes = append(changes, recentEvent{Agent: s.agent(), State: s.State})
 			}
 		}
 	}
-	for _, text := range changes {
-		a.events = append([]recentEvent{{text, time.Now()}}, a.events...)
+	for _, event := range changes {
+		event.At = time.Now()
+		a.events = append([]recentEvent{event}, a.events...)
 	}
 	if len(a.events) > 6 {
 		a.events = a.events[:6]
@@ -307,9 +303,29 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		}
 	}
 }
+func (a *nativeApp) loadPreferences() {
+	if data, err := os.ReadFile(a.prefsPath); err == nil {
+		prefs := a.prefs
+		if json.Unmarshal(data, &prefs) == nil {
+			a.prefs = prefs
+		}
+	}
+	if a.prefs.Language != languageChinese {
+		a.prefs.Language = languageEnglish
+	}
+	if a.prefs.Theme != "System" && a.prefs.Theme != "Light" && a.prefs.Theme != "Dark" {
+		a.prefs.Theme = "System"
+	}
+	if a.prefs.PreviewTheme != "Light" {
+		a.prefs.PreviewTheme = "Dark"
+	}
+}
 func (a *nativeApp) savePreferences() {
 	if a.live {
 		mygo.Theme.SetSource(mygo.ThemeSource(strings.ToLower(a.prefs.Theme)))
+		if a.updateTrayMenu != nil {
+			a.updateTrayMenu()
+		}
 		a.invalidate()
 	}
 	if a.prefsPath == "" {
@@ -369,15 +385,15 @@ func (a *nativeApp) loadImage(raw string) {
 func (a *nativeApp) running() bool { return a.data != nil && a.data.Status != nil }
 func (a *nativeApp) connection() string {
 	if !a.running() {
-		return "Service stopped"
+		return a.t("Service stopped")
 	}
 	switch a.data.Status.Discord {
 	case "connected":
-		return "Discord connected"
+		return a.t("Discord connected")
 	case "dry-run":
-		return "Dry run"
+		return a.t("Dry run")
 	default:
-		return "Waiting for Discord"
+		return a.t("Waiting for Discord")
 	}
 }
 func (a *nativeApp) sessions() []session {

@@ -101,22 +101,25 @@ func TestNativeNavigationPinAndScopedForms(t *testing.T) {
 }
 
 func TestNativeViewsFitAndControlsHaveNames(t *testing.T) {
-	for _, size := range [][2]float32{{1120, 820}, {980, 740}, {760, 620}} {
-		for _, page := range []string{"Overview", "Agents", "Appearance", "Summaries", "Preferences"} {
-			a := fixtureApp()
-			a.page = page
-			a.dispatch = func(map[string]any, string) {}
-			tt := ui.NewTester(a.view, int(size[0]), int(size[1]))
-			for _, info := range tt.AccessAll() {
-				if info.Role == ui.RoleButton && strings.TrimSpace(info.Name) == "" {
-					t.Fatalf("unnamed button on %s: %+v", page, info)
+	for _, language := range []string{languageEnglish, languageChinese} {
+		for _, size := range [][2]float32{{1120, 820}, {980, 740}, {760, 620}} {
+			for _, page := range []string{"Overview", "Agents", "Appearance", "Summaries", "Preferences"} {
+				a := fixtureApp()
+				a.prefs.Language = language
+				a.page = page
+				a.dispatch = func(map[string]any, string) {}
+				tt := ui.NewTester(a.view, int(size[0]), int(size[1]))
+				for _, info := range tt.AccessAll() {
+					if info.Role == ui.RoleButton && strings.TrimSpace(info.Name) == "" {
+						t.Fatalf("unnamed button on %s: %+v", page, info)
+					}
+					if info.Bounds.W > 0 && info.Bounds.H > 0 && (info.Bounds.X < 0 || info.Bounds.X+info.Bounds.W > size[0]+1) {
+						t.Fatalf("%s at %v overflows horizontally: %s %+v", page, size, info.Name, info.Bounds)
+					}
 				}
-				if info.Bounds.W > 0 && info.Bounds.H > 0 && (info.Bounds.X < 0 || info.Bounds.X+info.Bounds.W > size[0]+1) {
-					t.Fatalf("%s at %v overflows horizontally: %s %+v", page, size, info.Name, info.Bounds)
+				if page == "Overview" && size[0] == 1120 && language == languageEnglish {
+					saveTestImage(t, tt, "native-overview.png")
 				}
-			}
-			if page == "Overview" && size[0] == 1120 {
-				saveTestImage(t, tt, "native-overview.png")
 			}
 		}
 	}

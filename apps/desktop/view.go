@@ -13,6 +13,7 @@ func vector(paths string) *ui.SVG {
 }
 
 var icons = map[string]*ui.SVG{
+	"chevron":     vector(`<path d="m5 9 7 7 7-7"/>`),
 	"radio":       vector(`<circle cx="12" cy="12" r="2"/><path d="M8 7a7 7 0 0 0 0 10m8-10a7 7 0 0 1 0 10M5 4a11 11 0 0 0 0 16M19 4a11 11 0 0 1 0 16"/>`),
 	"Overview":    vector(`<path d="M2 12h5l3-8 4 16 3-8h5"/>`),
 	"Agents":      vector(`<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>`),
@@ -81,27 +82,27 @@ func (a *nativeApp) view(c *ui.Context) {
 				ui.Column(c).Padding(12, 28, 30, 28).Gap(0).Children(func() {
 					ui.Row(c).AlignItems(ui.Center).Gap(16).Margin(0, 0, 30, 0).Children(func() {
 						ui.Column(c).Grow(1).Gap(7).Children(func() {
-							ui.Text(c, "YOUR WORK, VISIBLE.").FontSize(9).LetterSpacing(1.8).TextColor(t.TextMuted)
-							ui.Text(c, a.page).FontSize(25).FontWeight(600)
-							ui.Text(c, descriptions[a.page]).FontSize(12).TextColor(t.TextMuted)
+							ui.Text(c, a.t("YOUR WORK, VISIBLE.")).FontSize(9).LetterSpacing(1.8).TextColor(t.TextMuted)
+							ui.Text(c, a.t(a.page)).FontSize(25).FontWeight(600)
+							ui.Text(c, a.t(descriptions[a.page])).FontSize(12).TextColor(t.TextMuted)
 						})
 						label := "Start service"
 						if a.running() {
 							label = "Stop service"
 						}
-						ui.Button(c.Key("power"), label).Disabled(a.busy || a.data == nil).OnClick(a.power)
+						ui.Button(c.Key("power"), a.t(label)).Disabled(a.busy || a.data == nil).OnClick(a.power)
 					})
 					if a.err != "" {
-						ui.Text(c, a.err).FontSize(12).TextColor(t.Danger).Padding(12).Background(t.Danger.Alpha(.06)).Radius(6).Margin(0, 0, 16, 0).Role(ui.RoleAlert)
+						ui.Text(c, a.t(a.err)).FontSize(12).TextColor(t.Danger).Padding(12).Background(t.Danger.Alpha(.06)).Radius(6).Margin(0, 0, 16, 0).Role(ui.RoleAlert)
 					}
 					if a.data != nil && a.data.ConfigurationError != nil {
-						ui.Text(c, "Configuration file error: "+*a.data.ConfigurationError).TextColor(t.Danger).FontSize(12).Margin(0, 0, 16, 0)
+						ui.Text(c, a.t("Configuration file error: %s", *a.data.ConfigurationError)).TextColor(t.Danger).FontSize(12).Margin(0, 0, 16, 0)
 					}
 					if a.data != nil && a.data.ServiceError != nil {
 						ui.Text(c, *a.data.ServiceError).TextColor(t.Danger).FontSize(12).Margin(0, 0, 16, 0)
 					}
 					if a.running() && a.data.Status.SettingsError != nil {
-						ui.Text(c, "The service is using its last valid configuration.").TextColor(t.Danger).FontSize(12).Margin(0, 0, 16, 0)
+						ui.Text(c, a.t("The service is using its last valid configuration.")).TextColor(t.Danger).FontSize(12).Margin(0, 0, 16, 0)
 					}
 					width, _ := c.Size()
 					if width >= 980 {
@@ -122,7 +123,7 @@ func (a *nativeApp) view(c *ui.Context) {
 				dot(c, color)
 				muted(c, a.connection())
 				ui.Spacer(c)
-				muted(c, "One local service · All your agents")
+				muted(c, a.t("One local service · All your agents"))
 			})
 		})
 	})
@@ -146,11 +147,11 @@ func (a *nativeApp) sidebar(c *ui.Context) {
 			ui.Box(c).Size(34, 34).Radius(10).Background(t.Accent).Center().Children(func() { ui.Icon(c, icons["radio"]).Size(23, 23).TextColor(t.AccentText) })
 			ui.Column(c).Gap(2).Children(func() {
 				ui.Text(c, "Presence").FontSize(19).FontWeight(600)
-				ui.Text(c, "STAY IN SYNC").FontSize(9).LetterSpacing(1.2).TextColor(t.TextMuted)
+				ui.Text(c, a.t("STAY IN SYNC")).FontSize(9).LetterSpacing(1.2).TextColor(t.TextMuted)
 			})
 		})
 		for _, page := range navPages {
-			button := ui.ButtonBase(c.Key(page)).Label(page).Padding(10, 12).Gap(10).Radius(7).Margin(0, 0, 5, 0)
+			button := ui.ButtonBase(c.Key(page)).Label(a.t(page)).Padding(10, 12).Gap(10).Radius(7).Margin(0, 0, 5, 0)
 			if a.page == page {
 				button.Background(t.Accent.Alpha(.10)).TextColor(t.Accent)
 			} else if button.Hovered() {
@@ -160,7 +161,7 @@ func (a *nativeApp) sidebar(c *ui.Context) {
 			}
 			button.Children(func() {
 				ui.Icon(c, icons[page]).Size(17, 17)
-				ui.Text(c, page).FontSize(12).Grow(1)
+				ui.Text(c, a.t(page)).FontSize(12).Grow(1)
 				if page == "Overview" {
 					ui.Text(c, fmt.Sprint(len(a.sessions()))).FontSize(10)
 				}
@@ -176,18 +177,18 @@ func (a *nativeApp) sidebar(c *ui.Context) {
 				label = "Local service running"
 			}
 			dot(c, color)
-			muted(c, label)
+			muted(c, a.t(label))
 		})
-		ui.ButtonBase(c.Key("preferences")).Label("Preferences").Padding(9, 8).Gap(7).Radius(6).Children(func() {
+		ui.ButtonBase(c.Key("preferences")).Label(a.t("Preferences")).Padding(9, 8).Gap(7).Radius(6).Children(func() {
 			ui.Icon(c, icons["Preferences"]).Size(16, 16)
-			ui.Text(c, "Preferences").FontSize(11).Grow(1)
+			ui.Text(c, a.t("Preferences")).FontSize(11).Grow(1)
 			muted(c, "v0.0.3")
 		}).OnClick(func() { a.page = "Preferences"; a.edit = nil })
 	})
 }
 func (a *nativeApp) pageView(c *ui.Context) {
-	if a.data == nil {
-		muted(c, "Connecting to the local service…")
+	if a.data == nil && a.page != "Preferences" {
+		muted(c, a.t("Connecting to the local service…"))
 		return
 	}
 	switch a.page {
@@ -201,13 +202,13 @@ func (a *nativeApp) pageView(c *ui.Context) {
 		a.preferencesView(c)
 	}
 	if a.notice != "" {
-		ui.Text(c, a.notice).FontSize(11).TextColor(c.Theme().Success).Margin(18, 0, 0, 0).Role(ui.RoleStatus)
+		ui.Text(c, a.t(a.notice)).FontSize(11).TextColor(c.Theme().Success).Margin(18, 0, 0, 0).Role(ui.RoleStatus)
 	}
 }
 func (a *nativeApp) overview(c *ui.Context) {
 	t := c.Theme()
 	sessions := a.sessions()
-	heading(c, fmt.Sprintf("Active sessions  %d", len(sessions)), "Current sessions only")
+	heading(c, a.t("Active sessions  %d", len(sessions)), a.t("Current sessions only"))
 	if len(sessions) > 0 {
 		ui.Row(c).Padding(13).Gap(10).Background(t.Surface).Border(1, t.Border).Radius(8).Margin(0, 0, 14, 0).Children(func() {
 			ui.Icon(c, icons["radio"]).Size(16, 16).TextColor(t.TextMuted)
@@ -218,19 +219,19 @@ func (a *nativeApp) overview(c *ui.Context) {
 					label = "Pinned session"
 					help = "Keeps the selected session visible"
 				}
-				ui.Text(c, label).FontSize(12).FontWeight(500)
-				muted(c, help)
+				ui.Text(c, a.t(label)).FontSize(12).FontWeight(500)
+				muted(c, a.t(help))
 			})
 			if a.pinned() {
-				ui.Button(c, "Use automatic").FontSize(11).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "pin", "key": nil}, "Resumed automatic selection.") })
+				ui.Button(c, a.t("Use automatic")).FontSize(11).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "pin", "key": nil}, "Resumed automatic selection.") })
 			} else {
-				ui.Text(c, "Enabled").FontSize(10).TextColor(t.TextMuted)
+				ui.Text(c, a.t("Enabled")).FontSize(10).TextColor(t.TextMuted)
 			}
 		})
 		for _, s := range sessions {
 			a.sessionRow(c, s, false)
 		}
-		muted(c, "Click a session to pin it to your Discord activity.").Margin(4, 0, 0, 0)
+		muted(c, a.t("Click a session to pin it to your Discord activity.")).Margin(4, 0, 0, 0)
 	} else {
 		ui.Column(c).MinHeight(230).Padding(25).Gap(12).Radius(8).Background(t.Surface).Center().Children(func() {
 			ui.Icon(c, icons["radio"]).Size(28, 28).TextColor(t.TextMuted)
@@ -240,27 +241,31 @@ func (a *nativeApp) overview(c *ui.Context) {
 				title = "Waiting for your agent"
 				help = "Connect an agent and start a task. Your session will appear here."
 			}
-			ui.Text(c, title).FontSize(14).FontWeight(500)
-			muted(c, help).TextAlign(ui.Center)
+			ui.Text(c, a.t(title)).FontSize(14).FontWeight(500)
+			muted(c, a.t(help)).TextAlign(ui.Center)
 			if a.running() {
-				ui.Button(c, "Set up an agent").Margin(5, 0, 0, 0).OnClick(func() { a.page = "Agents" })
+				ui.Button(c, a.t("Set up an agent")).Margin(5, 0, 0, 0).OnClick(func() { a.page = "Agents" })
 			}
 		})
 	}
 	ui.Column(c).Margin(30, 0, 0, 0).Children(func() {
-		heading(c, "Recent events", "Since opening the app")
+		heading(c, a.t("Recent events"), a.t("Since opening the app"))
 		if len(a.events) == 0 {
-			muted(c, "No events yet")
+			muted(c, a.t("No events yet"))
 		}
 		for _, event := range a.events {
 			ui.Row(c).Gap(8).Padding(8, 0).Children(func() {
 				dot(c, t.Border)
-				ui.Text(c, event.Text).FontSize(11).Grow(1)
+				text := a.t(event.Text)
+				if event.Agent != "" {
+					text = agentLabels[event.Agent] + " · " + a.t(stateLabels[event.State])
+				}
+				ui.Text(c, text).FontSize(11).Grow(1)
 				age := "Just now"
 				if elapsed := time.Since(event.At); elapsed >= time.Minute {
-					age = fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
+					age = a.t("%dm ago", int(elapsed.Minutes()))
 				}
-				muted(c, age).FontSize(10)
+				muted(c, a.t(age)).FontSize(10)
 			})
 		}
 	})
@@ -283,7 +288,7 @@ func agentIcon(c *ui.Context, id string, size float32) {
 func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 	t := c.Theme()
 	selected := a.running() && a.data.Status.Selected != nil && *a.data.Status.Selected == s.Key
-	row := ui.ButtonBase(c.Key(s.Key)).Label("Pin "+agentLabels[s.agent()]+": "+s.title()).Padding(14, 12).Gap(11).Radius(8).Border(1, t.Border).Margin(0, 0, 9, 0).Disabled(a.busy)
+	row := ui.ButtonBase(c.Key(s.Key)).Label(a.t("Pin %s: %s", agentLabels[s.agent()], a.sessionTitle(s))).Padding(14, 12).Gap(11).Radius(8).Border(1, t.Border).Margin(0, 0, 9, 0).Disabled(a.busy)
 	if compact {
 		row.Padding(9).Border(0, t.Border).Margin(0, 0, 4, 0)
 	}
@@ -309,11 +314,11 @@ func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 					if a.pinned() {
 						label = "Pinned"
 					}
-					ui.Text(c, label).FontSize(10).TextColor(t.Accent)
+					ui.Text(c, a.t(label)).FontSize(10).TextColor(t.Accent)
 				}
 			})
 			if !compact {
-				ui.Text(c, s.title()).FontSize(12)
+				ui.Text(c, a.sessionTitle(s)).FontSize(12)
 			}
 			ui.Row(c).Gap(6).Children(func() {
 				color := t.TextMuted
@@ -327,7 +332,7 @@ func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 					color = t.Danger
 				}
 				dot(c, color)
-				muted(c, stateLabels[s.State])
+				muted(c, a.t(stateLabels[s.State]))
 				if !compact {
 					muted(c, "· "+elapsed(s.StartedAt))
 				}
@@ -338,7 +343,7 @@ func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 }
 func (a *nativeApp) agentsView(c *ui.Context) {
 	t := c.Theme()
-	heading(c, "Your agents", "5 supported agents")
+	heading(c, a.t("Your agents"), a.t("5 supported agents"))
 	for _, id := range agentIDs {
 		count := 0
 		for _, s := range a.sessions() {
@@ -352,18 +357,18 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 				ui.Text(c, agentLabels[id]).FontSize(12).FontWeight(500)
 				label := "No sessions detected"
 				if count > 0 {
-					label = fmt.Sprintf("%d active sessions", count)
+					label = a.t("%d active sessions", count)
 				}
-				muted(c, label)
+				muted(c, a.t(label))
 			})
-			ui.Button(c.Key("setup-"+id), "Setup").Label("Set up " + agentLabels[id]).FontSize(11).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "integration", "agent": id}, "") })
+			ui.Button(c.Key("setup-"+id), a.t("Setup")).Label(a.t("Set up %s", agentLabels[id])).FontSize(11).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "integration", "agent": id}, "") })
 		})
 	}
 	ui.Column(c).Padding(15).Gap(5).Background(t.Surface).Radius(7).Margin(24, 0, 20, 0).Children(func() {
-		ui.Text(c, "One service. Individual settings.").FontSize(12).FontWeight(500)
-		muted(c, "Agents inherit global settings. Override their summary model and appearance individually.")
+		ui.Text(c, a.t("One service. Individual settings.")).FontSize(12).FontWeight(500)
+		muted(c, a.t("Agents inherit global settings. Override their summary model and appearance individually."))
 	})
-	ui.Button(c, "Manage agent settings").OnClick(func() { a.page = "Summaries"; a.edit = nil })
+	ui.Button(c, a.t("Manage agent settings")).OnClick(func() { a.page = "Summaries"; a.edit = nil })
 }
 func (a *nativeApp) settingsView(c *ui.Context) {
 	t := c.Theme()
@@ -372,8 +377,8 @@ func (a *nativeApp) settingsView(c *ui.Context) {
 		options = append(options, agentLabels[id])
 	}
 	ui.Row(c).Gap(14).Margin(0, 0, 22, 0).Children(func() {
-		caption := muted(c, "Settings scope").Grow(1)
-		if ui.Select(c.Key("scope"), &a.scope, options).LabelledBy(caption).Width(190).Changed() {
+		caption := muted(c, a.t("Settings scope")).Grow(1)
+		if a.selectValue(c.Key("scope"), &a.scope, options).LabelledBy(caption).Width(190).Changed() {
 			a.edit = nil
 		}
 	})
@@ -386,7 +391,7 @@ func (a *nativeApp) settingsView(c *ui.Context) {
 	if a.page == "Summaries" {
 		title = "Automatic summaries"
 	}
-	heading(c, title, tag)
+	heading(c, a.t(title), a.t(tag))
 	ui.Column(c.Key(a.page + e.Scope)).Gap(0).Disabled(a.busy || a.data.ConfigurationError != nil).Children(func() {
 		if a.page == "Appearance" {
 			a.appearanceForm(c, e)
@@ -398,100 +403,110 @@ func (a *nativeApp) settingsView(c *ui.Context) {
 			if e.Scope != "global" {
 				label = "Inherit global"
 			}
-			ui.Button(c, label).FontSize(11).OnClick(a.resetEditor)
+			ui.Button(c, a.t(label)).FontSize(11).OnClick(a.resetEditor)
 			ui.Spacer(c)
-			ui.PrimaryButton(c, "Save changes").Disabled(!e.Dirty).OnClick(a.saveEditor)
+			ui.PrimaryButton(c, a.t("Save changes")).Disabled(!e.Dirty).OnClick(a.saveEditor)
 		})
 	})
 }
-func field(c *ui.Context, label string, value *string, placeholder, help string, maxLength int) bool {
+func (a *nativeApp) field(c *ui.Context, label string, value *string, placeholder, help string, maxLength int) bool {
 	changed := false
 	ui.Column(c).Gap(7).Margin(0, 0, 18, 0).Children(func() {
-		caption := ui.Text(c, label).FontSize(12)
-		changed = ui.TextInput(c.Key(label), value).LabelledBy(caption).Placeholder(placeholder).MaxLength(maxLength).FillWidth().Changed()
+		caption := ui.Text(c, a.t(label)).FontSize(12)
+		changed = ui.TextInput(c.Key(label), value).LabelledBy(caption).Placeholder(a.t(placeholder)).MaxLength(maxLength).FillWidth().Changed()
 		if help != "" {
-			muted(c, help).FontSize(10)
+			muted(c, a.t(help)).FontSize(10)
 		}
 	})
 	return changed
 }
 func (a *nativeApp) appearanceForm(c *ui.Context, e *editor) {
 	ui.Column(c).Gap(7).Margin(0, 0, 18, 0).Children(func() {
-		ui.Text(c, "Activity type").FontSize(12)
-		if ui.Select(c, &e.Type, []string{"Playing", "Listening", "Watching", "Competing"}).Label("Activity type").FillWidth().Changed() {
+		caption := ui.Text(c, a.t("Activity type")).FontSize(12)
+		if a.selectValue(c, &e.Type, []string{"Playing", "Listening", "Watching", "Competing"}).LabelledBy(caption).FillWidth().Changed() {
 			e.Dirty = true
 		}
 	})
-	if field(c, "Activity name", &e.Name, "{topic}", "{topic} Work summary · {agent} Agent name", 128) {
+	if a.field(c, "Activity name", &e.Name, "{topic}", "{topic} Work summary · {agent} Agent name", 128) {
 		e.Dirty = true
 	}
-	if field(c, "Details", &e.Details, "{phase}", "{phase} Activity state; leave blank to hide this line", 128) {
+	if a.field(c, "Details", &e.Details, "{phase}", "{phase} Activity state; leave blank to hide this line", 128) {
 		e.Dirty = true
 	}
-	if field(c, "Subtitle", &e.Subtitle, "{subtitle}", "{subtitle} Summary subtitle; leave blank to hide this line", 128) {
+	if a.field(c, "Subtitle", &e.Subtitle, "{subtitle}", "{subtitle} Summary subtitle; leave blank to hide this line", 128) {
 		e.Dirty = true
 	}
-	if ui.Checkbox(c, &e.Timer, "Show elapsed time").Margin(0, 0, 13, 0).Changed() {
+	if ui.Checkbox(c, &e.Timer, a.t("Show elapsed time")).Margin(0, 0, 13, 0).Changed() {
 		e.Dirty = true
 	}
-	if ui.Checkbox(c, &e.ShowImage, "Show activity image").Margin(0, 0, 17, 0).Changed() {
+	if ui.Checkbox(c, &e.ShowImage, a.t("Show activity image")).Margin(0, 0, 17, 0).Changed() {
 		e.Dirty = true
 	}
-	if e.ShowImage && field(c, "Custom large image", &e.Image, "HTTPS image URL or Discord asset key", "Leave blank to use the default agent icon.", 2048) {
+	if e.ShowImage && a.field(c, "Custom large image", &e.Image, "HTTPS image URL or Discord asset key", "Leave blank to use the default agent icon.", 2048) {
 		e.Dirty = true
 		a.loadImage(e.Image)
 	}
 }
 func (a *nativeApp) summaryForm(c *ui.Context, e *editor) {
-	if ui.Checkbox(c, &e.Enabled, "Generate summaries automatically").Margin(0, 0, 24, 0).Changed() {
+	if ui.Checkbox(c, &e.Enabled, a.t("Generate summaries automatically")).Margin(0, 0, 24, 0).Changed() {
 		e.Dirty = true
 	}
 	ui.Column(c).Disabled(!e.Enabled).Children(func() {
 		ui.Column(c).Gap(7).Margin(0, 0, 18, 0).Children(func() {
-			ui.Text(c, "Model source").FontSize(12)
-			if ui.Select(c, &e.Source, []string{"Follow agent session", "Custom compatible service"}).FillWidth().Label("Model source").Changed() {
+			caption := ui.Text(c, a.t("Model source")).FontSize(12)
+			if a.selectValue(c, &e.Source, []string{"Follow agent session", "Custom compatible service"}).FillWidth().LabelledBy(caption).Changed() {
 				e.Dirty = true
 			}
-			muted(c, "Use the model and provider from the current session.").FontSize(10)
+			muted(c, a.t("Use the model and provider from the current session.")).FontSize(10)
 		})
 		if e.Source == "Custom compatible service" {
-			if field(c, "Service URL", &e.BaseURL, "https://api.example.com/v1", "", 2048) {
+			if a.field(c, "Service URL", &e.BaseURL, "https://api.example.com/v1", "", 2048) {
 				e.Dirty = true
 			}
-			if field(c, "API key environment variable", &e.KeyEnv, "OPENAI_API_KEY", "Enter the variable name. The local service reads its value.", 128) {
+			if a.field(c, "API key environment variable", &e.KeyEnv, "OPENAI_API_KEY", "Enter the variable name. The local service reads its value.", 128) {
 				e.Dirty = true
 			}
 		}
-		if field(c, "Model override", &e.Model, "Leave blank to follow the current session", "Optional", 128) {
+		if a.field(c, "Model override", &e.Model, "Leave blank to follow the current session", "Optional", 128) {
 			e.Dirty = true
 		}
 		ui.Column(c).Gap(7).Margin(0, 0, 18, 0).Children(func() {
-			ui.Text(c, "Custom prompt").FontSize(12)
-			if ui.TextArea(c.Key("prompt"), &e.Prompt).Label("Custom prompt").Placeholder("Keep summaries concise, specific, and relaxed.").MaxLength(4000).Height(100).Changed() {
+			ui.Text(c, a.t("Custom prompt")).FontSize(12)
+			if ui.TextArea(c.Key("prompt"), &e.Prompt).Label(a.t("Custom prompt")).Placeholder(a.t("Keep summaries concise, specific, and relaxed.")).MaxLength(4000).Height(100).Changed() {
 				e.Dirty = true
 			}
 		})
 		ui.Row(c).Margin(0, 0, 8, 0).Children(func() {
-			ui.Text(c, "Summary length").FontSize(12).Grow(1)
-			muted(c, fmt.Sprintf("%d characters", int(e.Length)))
+			ui.Text(c, a.t("Summary length")).FontSize(12).Grow(1)
+			muted(c, a.t("%d characters", int(e.Length)))
 		})
-		if ui.StepSlider(c, &e.Length, 20, 120, 1).Label("Summary length").FillWidth().Changed() {
+		if ui.StepSlider(c, &e.Length, 20, 120, 1).Label(a.t("Summary length")).FillWidth().Changed() {
 			e.Dirty = true
 		}
 	})
-	muted(c, "Lifecycle updates continue when automatic summaries are off.").Margin(15, 0, 0, 0)
+	muted(c, a.t("Lifecycle updates continue when automatic summaries are off.")).Margin(15, 0, 0, 0)
 }
 func (a *nativeApp) preferencesView(c *ui.Context) {
 	t := c.Theme()
-	heading(c, "Appearance", "")
-	ui.Column(c).Gap(7).Children(func() {
-		ui.Text(c, "Theme").FontSize(12)
-		if ui.Select(c, &a.prefs.Theme, []string{"System", "Light", "Dark"}).Label("Theme").FillWidth().Changed() {
+	heading(c, a.t("Language"), "")
+	ui.Column(c.Key("language")).Gap(7).Margin(0, 0, 26, 0).Children(func() {
+		caption := ui.Text(c, a.t("Interface language")).FontSize(12)
+		if a.selectValue(c, &a.prefs.Language, []string{languageEnglish, languageChinese}).LabelledBy(caption).FillWidth().Changed() {
 			a.savePreferences()
 		}
 	})
+	heading(c, a.t("Appearance"), "")
+	ui.Column(c).Gap(7).Children(func() {
+		caption := ui.Text(c, a.t("Theme")).FontSize(12)
+		if a.selectValue(c, &a.prefs.Theme, []string{"System", "Light", "Dark"}).LabelledBy(caption).FillWidth().Changed() {
+			a.savePreferences()
+		}
+	})
+	if a.data == nil {
+		return
+	}
 	ui.Column(c).Margin(30, 0, 0, 0).Children(func() {
-		heading(c, "Service & connections", "")
+		heading(c, a.t("Service & connections"), "")
 		running := "Stopped"
 		pid := "—"
 		if a.running() {
@@ -499,17 +514,17 @@ func (a *nativeApp) preferencesView(c *ui.Context) {
 			pid = fmt.Sprint(a.data.Status.PID)
 		}
 		for _, item := range [][2]string{{"Local service", running}, {"Discord", a.connection()}, {"Process", pid}} {
-			ui.Row(c).Padding(12, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() { muted(c, item[0]).Grow(1); ui.Text(c, item[1]).FontSize(12) })
+			ui.Row(c).Padding(12, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() { muted(c, a.t(item[0])).Grow(1); ui.Text(c, a.t(item[1])).FontSize(12) })
 		}
 	})
 	for _, item := range [][2]string{{"Configuration file", a.data.ConfigPath}, {"Local socket", a.data.SocketPath}} {
 		ui.Column(c).Gap(8).Margin(20, 0, 0, 0).Children(func() {
-			muted(c, item[0])
+			muted(c, a.t(item[0]))
 			ui.Text(c, item[1]).Font("monospace").FontSize(11).Selectable().Padding(9).Background(t.Surface).Radius(5)
 		})
 	}
-	ui.Button(c, "Refresh connection").Margin(20, 0, 0, 0).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "snapshot"}, "Connection status refreshed.") })
-	muted(c, "Closing the window keeps Presence in the tray. Quitting the app leaves the background service running.").Margin(18, 0, 0, 0)
+	ui.Button(c, a.t("Refresh connection")).Margin(20, 0, 0, 0).Disabled(a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "snapshot"}, "Connection status refreshed.") })
+	muted(c, a.t("Closing the window keeps Presence in the tray. Quitting the app leaves the background service running.")).Margin(18, 0, 0, 0)
 }
 func (a *nativeApp) setupDialog(c *ui.Context) {
 	if a.setup == nil {
@@ -517,41 +532,41 @@ func (a *nativeApp) setupDialog(c *ui.Context) {
 	}
 	ui.Modal(c, &a.setupOpen, func() {
 		ui.Column(c).Width(560).MaxWidthPercent(100).Gap(14).Children(func() {
-			ui.Text(c, "Set up "+agentLabels[a.setup.Agent]).FontSize(19).FontWeight(600)
-			if ui.Segmented(c, &a.setupMode, "Agent prompt", "Manual configuration").FillEqually().Label("Setup method").Changed() {
+			ui.Text(c, a.t("Set up %s", agentLabels[a.setup.Agent])).FontSize(19).FontWeight(600)
+			if ui.Segmented(c, &a.setupMode, a.t("Agent prompt"), a.t("Manual configuration")).FillEqually().Label(a.t("Setup method")).Changed() {
 				a.setupCopiedUntil = time.Time{}
 				a.setupCopyError = ""
 			}
 			content, copyLabel, fieldLabel := &a.setup.Prompt, "Copy prompt", "Setup prompt"
 			ui.Column(c).MinHeight(72).Gap(8).Children(func() {
 				if a.setupMode == 0 {
-					ui.Text(c, "Paste this prompt into "+agentLabels[a.setup.Agent]+" and let it configure the integration for you.").FontSize(12)
+					ui.Text(c, a.t("Paste this prompt into %s and let it configure the integration for you.", agentLabels[a.setup.Agent])).FontSize(12)
 				} else {
 					content, copyLabel, fieldLabel = &a.setup.Content, "Copy configuration", "Integration configuration"
-					ui.Text(c, a.setup.Instructions).FontSize(12)
+					ui.Text(c, a.t(a.setup.Instructions)).FontSize(12)
 					if a.setup.Path != "" {
 						ui.Text(c, a.setup.Path).Font("monospace").FontSize(11).Selectable()
 					}
 				}
 			})
-			ui.TextArea(c.Key(a.setupMode), content).Label(fieldLabel).ReadOnly(true).Height(240).Font("monospace").FontSize(11)
+			ui.TextArea(c.Key(a.setupMode), content).Label(a.t(fieldLabel)).ReadOnly(true).Height(240).Font("monospace").FontSize(11)
 			copied := c.Now().Before(a.setupCopiedUntil)
 			if copied {
 				c.After(a.setupCopiedUntil.Sub(c.Now()))
 			}
 			if a.setupCopyError != "" {
-				ui.Text(c, a.setupCopyError).FontSize(11).TextColor(c.Theme().Danger).Role(ui.RoleAlert)
+				ui.Text(c, a.t(a.setupCopyError)).FontSize(11).TextColor(c.Theme().Danger).Role(ui.RoleAlert)
 			}
 			ui.Row(c.Key("setup-actions")).Gap(10).Justify(ui.End).Children(func() {
 				if copied {
-					ui.Text(c, "Copied to clipboard.").FontSize(11).TextColor(c.Theme().Success).Role(ui.RoleStatus)
+					ui.Text(c, a.t("Copied to clipboard.")).FontSize(11).TextColor(c.Theme().Success).Role(ui.RoleStatus)
 				}
-				ui.Button(c.Key("setup-close"), "Close").OnClick(func() { a.setupOpen = false })
+				ui.Button(c.Key("setup-close"), a.t("Close")).OnClick(func() { a.setupOpen = false })
 				label := copyLabel
 				if copied {
 					label = "Copied"
 				}
-				ui.PrimaryButton(c.Key("setup-copy"), label).MinWidth(140).OnClick(func() {
+				ui.PrimaryButton(c.Key("setup-copy"), a.t(label)).MinWidth(140).OnClick(func() {
 					at, services, mode, setup := c.Now(), c.Services(), a.setupMode, a.setup
 					a.setupCopyError = ""
 					c.WriteClipboardThen(*content, func(err error) {
@@ -606,10 +621,10 @@ func (a *nativeApp) preview() (*activity, *session, bool) {
 }
 func (a *nativeApp) profileView(c *ui.Context) {
 	t := c.Theme()
-	heading(c, "DISCORD PREVIEW", "")
+	heading(c, a.t("DISCORD PREVIEW"), "")
 	ui.Row(c).Gap(5).Justify(ui.End).Margin(-34, 0, 12, 0).Children(func() {
 		for _, theme := range []string{"Light", "Dark"} {
-			ui.Button(c.Key("preview-"+theme), theme).Label(theme+" profile card").FontSize(10).Padding(4, 7).OnClick(func() { a.prefs.PreviewTheme = theme; a.savePreferences() })
+			ui.Button(c.Key("preview-"+theme), a.t(theme)).Label(a.t("%s profile card", a.t(theme))).FontSize(10).Padding(4, 7).OnClick(func() { a.prefs.PreviewTheme = theme; a.savePreferences() })
 		}
 	})
 	act, s, draft := a.preview()
@@ -617,7 +632,7 @@ func (a *nativeApp) profileView(c *ui.Context) {
 	if a.running() {
 		user = a.data.Status.Profile
 	}
-	name, username := "Your Discord profile", "Connect Discord to show your profile"
+	name, username := a.t("Your Discord profile"), a.t("Connect Discord to show your profile")
 	if user != nil {
 		name = user.GlobalName
 		if name == "" {
@@ -657,7 +672,7 @@ func (a *nativeApp) profileView(c *ui.Context) {
 						ui.Text(c, initial).FontSize(32).TextColor(ui.Hex("#f5f1e6"))
 					})
 				}
-				ui.Box(c).Absolute().Right(0).Bottom(0).Size(22, 22).Radius(11).Background(ui.Hex("#43a25a")).Border(5, dc.Background).Tooltip("Example status indicator")
+				ui.Box(c).Absolute().Right(0).Bottom(0).Size(22, 22).Radius(11).Background(ui.Hex("#43a25a")).Border(5, dc.Background).Tooltip(a.t("Example status indicator"))
 			})
 			ui.Text(c, "···").Absolute().Right(16).Top(7).FontSize(22).TextColor(dc.TextMuted)
 		})
@@ -666,8 +681,8 @@ func (a *nativeApp) profileView(c *ui.Context) {
 				if act == nil {
 					ui.Column(c).Padding(12, 0).Gap(10).Center().Children(func() {
 						ui.Icon(c, icons["game"]).Size(26, 26).TextColor(dc.TextMuted)
-						ui.Text(c, "No activity to display").FontSize(12).FontWeight(500)
-						ui.Text(c, "Your activity appears here when an agent starts working.").FontSize(11).TextColor(dc.TextMuted).TextAlign(ui.Center)
+						ui.Text(c, a.t("No activity to display")).FontSize(12).FontWeight(500)
+						ui.Text(c, a.t("Your activity appears here when an agent starts working.")).FontSize(11).TextColor(dc.TextMuted).TextAlign(ui.Center)
 					})
 				} else {
 					category := map[int]string{0: "Playing", 2: "Listening", 3: "Watching", 5: "Competing"}[act.Type]
@@ -675,7 +690,7 @@ func (a *nativeApp) profileView(c *ui.Context) {
 						category = "Playing"
 					}
 					ui.Row(c).Children(func() {
-						ui.Text(c, category).FontSize(10).TextColor(dc.TextMuted).Grow(1)
+						ui.Text(c, a.t(category)).FontSize(10).TextColor(dc.TextMuted).Grow(1)
 						ui.Text(c, "···").FontSize(14).TextColor(dc.TextMuted)
 					})
 					ui.Row(c).AlignItems(ui.Start).Gap(11).Children(func() {
@@ -691,14 +706,14 @@ func (a *nativeApp) profileView(c *ui.Context) {
 								ui.Text(c, act.State).FontSize(11)
 							}
 							if act.Party != nil && len(act.Party.Size) == 2 {
-								ui.Text(c, fmt.Sprintf("%d / %d members", act.Party.Size[0], act.Party.Size[1])).FontSize(11)
+								ui.Text(c, a.t("%d / %d members", act.Party.Size[0], act.Party.Size[1])).FontSize(11)
 							}
 							if act.Timestamps != nil {
 								if act.Timestamps.End > 0 {
 									remaining := max(int64(0), act.Timestamps.End-time.Now().Unix())
-									ui.Text(c, fmt.Sprintf("%02d:%02d remaining", remaining/60, remaining%60)).FontSize(11).TextColor(dc.TextMuted)
+									ui.Text(c, a.t("%02d:%02d remaining", remaining/60, remaining%60)).FontSize(11).TextColor(dc.TextMuted)
 								} else if act.Timestamps.Start > 0 {
-									ui.Text(c, elapsed(act.Timestamps.Start*1000)+" elapsed").FontSize(11).TextColor(dc.TextMuted)
+									ui.Text(c, a.t("%s elapsed", elapsed(act.Timestamps.Start*1000))).FontSize(11).TextColor(dc.TextMuted)
 								}
 							}
 						})
@@ -723,8 +738,8 @@ func (a *nativeApp) profileView(c *ui.Context) {
 		label = "Unsaved appearance preview"
 		color = t.TextMuted
 	}
-	ui.Row(c).Gap(6).Justify(ui.Center).Margin(16, 0, 5, 0).Children(func() { dot(c, color); muted(c, label) })
-	muted(c, "Final appearance depends on your Discord client.").FontSize(10).TextAlign(ui.Center)
+	ui.Row(c).Gap(6).Justify(ui.Center).Margin(16, 0, 5, 0).Children(func() { dot(c, color); muted(c, a.t(label)) })
+	muted(c, a.t("Final appearance depends on your Discord client.")).FontSize(10).TextAlign(ui.Center)
 }
 func (a *nativeApp) activityImage(c *ui.Context, act *activity, s *session, dc *ui.Theme) {
 	ui.Box(c).Size(58, 58).Shrink(0).Background(dc.Border).Radius(9).Center().Tooltip(act.Assets.LargeText).Children(func() {
@@ -768,24 +783,24 @@ func (a *nativeApp) trayView(c *ui.Context) {
 				if s != nil {
 					label = agentLabels[s.agent()]
 				}
-				muted(c, label)
-				title := "Waiting for an agent"
+				muted(c, a.t(label))
+				title := a.t("Waiting for an agent")
 				if !a.running() {
-					title = "Service stopped"
+					title = a.t("Service stopped")
 				}
 				if act != nil {
 					title = act.Name
 				}
 				ui.Text(c, title).FontSize(14).FontWeight(500)
 				if s != nil {
-					muted(c, stateLabels[s.State]+" · "+elapsed(s.StartedAt))
+					muted(c, a.t(stateLabels[s.State])+" · "+elapsed(s.StartedAt))
 				}
 			})
 		})
 		ui.Divider(c)
 		ui.Row(c).Margin(14, 0, 12, 0).Children(func() {
-			ui.Text(c, "Activity source").FontSize(11).Grow(1)
-			ui.Button(c, "Use automatic").FontSize(10).Disabled(!a.pinned() || a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "pin", "key": nil}, "") })
+			ui.Text(c, a.t("Activity source")).FontSize(11).Grow(1)
+			ui.Button(c, a.t("Use automatic")).FontSize(10).Disabled(!a.pinned() || a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "pin", "key": nil}, "") })
 		})
 		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Children(func() {
@@ -794,22 +809,22 @@ func (a *nativeApp) trayView(c *ui.Context) {
 					a.sessionRow(c, s, true)
 				}
 				if len(sessions) == 0 {
-					muted(c, "No active sessions").Padding(25, 5)
+					muted(c, a.t("No active sessions")).Padding(25, 5)
 				}
 			})
 		})
 		if a.err != "" {
-			ui.Text(c, a.err).FontSize(11).TextColor(t.Danger).Margin(10, 0).Role(ui.RoleAlert)
+			ui.Text(c, a.t(a.err)).FontSize(11).TextColor(t.Danger).Margin(10, 0).Role(ui.RoleAlert)
 		}
 		ui.Divider(c)
 		ui.Row(c).Gap(12).Padding(15, 0, 0, 0).Children(func() {
-			ui.Button(c, "Open main window").FontSize(11).OnClick(a.bridge.OpenMain)
+			ui.Button(c, a.t("Open main window")).FontSize(11).OnClick(a.bridge.OpenMain)
 			ui.Spacer(c)
 			label := "Start service"
 			if a.running() {
 				label = "Stop service"
 			}
-			ui.Button(c, label).FontSize(11).Disabled(a.busy || a.data == nil).OnClick(a.power)
+			ui.Button(c, a.t(label)).FontSize(11).Disabled(a.busy || a.data == nil).OnClick(a.power)
 		})
 	})
 	if c.Shortcut(0, ui.KeyEscape) || c.Shortcut(ui.Cmd, ui.KeyW) {
