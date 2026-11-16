@@ -44,5 +44,6 @@ export async function runHook(agent: HookAgent): Promise<void> {
 export function hookConfig(agent: HookAgent, command = 'agent-discord-presence'): object {
   return {hooks: Object.fromEntries(hookEvents[agent].map(name => [name, [{hooks: [{
     type: 'command', command: `${command} hook ${agent}`, timeout: 2,
+    ...(agent === 'codex' ? {statusMessage: 'Agent Discord Presence'} : {}),
   }]}]]))};
 }

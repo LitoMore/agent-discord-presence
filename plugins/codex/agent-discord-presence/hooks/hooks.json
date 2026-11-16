@@ -6,7 +6,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -17,7 +18,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -28,7 +30,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -39,7 +42,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -50,7 +54,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -61,7 +66,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -72,7 +78,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
@@ -83,7 +90,8 @@
           {
             "type": "command",
             "command": "agent-discord-presence hook codex",
-            "timeout": 2
+            "timeout": 2,
+            "statusMessage": "Agent Discord Presence"
           }
         ]
       }
