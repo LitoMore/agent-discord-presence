@@ -1,5 +1,7 @@
 # Agent Discord Presence
 
+![](assets/readme-cover.webp)
+
 Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness, powered by one local service that keeps your active work visible in Discord.
 
 > [!NOTE]\
@@ -10,7 +12,7 @@ Discord Rich Presence for Codex, Claude Code, OpenCode, Pi, and DeepSeek Harness
 - Generates a summary title, subtitle, activity state, and elapsed session time for your active agent work.
 - Selects the active session across supported agents, reconnects to Discord, and clears stale sessions automatically.
 - Uses the current agent model by default for summaries, with optional custom model, service, language, and prompt styling.
-- Summarizes completed replies by default, with optional tool-call summaries for Codex and Claude Code using tool names only.
+- Summarizes completed replies by defavult, with optional tool-call summaries for Codex and Claude Code using tool names only.
 - Sends up to 4,000 characters of the completed assistant reply to the summarization model and includes model usage metadata.
 - Allows automatic summaries to be disabled while keeping lifecycle updates enabled.
 - Runs multiple agents together with [independent model, prompt, and display settings](USAGE.md#independent-configuration-for-each-agent).
