@@ -93,7 +93,7 @@ func (a *nativeApp) view(c *ui.Context) {
 		a.sidebar(c)
 		ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
 			ui.Box(c).Height(44).Shrink(0).DragWindow()
-			ui.Scroll(c).Grow(1).Children(func() {
+			ui.Scroll(c).Scrollbars(false).Grow(1).Children(func() {
 				ui.Column(c).Padding(12, 28, 30, 28).Gap(0).Children(func() {
 					ui.Row(c).AlignItems(ui.Center).Gap(16).Margin(0, 0, 30, 0).Children(func() {
 						ui.Column(c).Grow(1).Gap(7).Children(func() {
@@ -557,6 +557,10 @@ func (a *nativeApp) setupDialog(c *ui.Context) {
 	if a.setup == nil {
 		return
 	}
+	if a.setupPlan != nil {
+		a.managedSetupDialog(c)
+		return
+	}
 	ui.Modal(c, &a.setupOpen, func() {
 		ui.Column(c).Width(560).MaxWidthPercent(100).Gap(14).Children(func() {
 			ui.Text(c, a.t("Set up %s", agentLabels[a.setup.Agent])).FontSize(19).FontWeight(600)
@@ -620,59 +624,137 @@ func (a *nativeApp) removalDialog(c *ui.Context) {
 	p := a.removal
 	done := a.removalResult != nil && a.removalResult.Removed
 	ui.Modal(c, &a.removalOpen, func() {
-		ui.Column(c).Width(560).MaxWidthPercent(100).Gap(14).Children(func() {
+		ui.Column(c).Width(640).MaxWidthPercent(100).Gap(18).Children(func() {
 			ui.Text(c, a.t("Remove %s integration", agentLabels[p.Agent])).FontSize(19).FontWeight(600)
-			if p.Kind != "managed" && !done {
-				ui.Text(c, a.t("Integration file")).FontSize(12)
-				ui.TextInput(c.Key("removal-path"), &a.removalPath).Label(a.t("Integration file")).FillWidth().Disabled(a.busy)
-				muted(c, a.t("For project or custom configuration, enter its exact file path and preview again."))
-			} else if p.Path != "" {
-				ui.Text(c, p.Path).Font("monospace").FontSize(11).Selectable()
-			}
-			if done {
-				label := "Integration removed."
-				if p.ManualReview {
-					label = "Recognized hooks removed. Manual review is still required."
-				}
-				ui.Text(c, a.t(label)).TextColor(c.Theme().Success).Role(ui.RoleStatus)
-				ui.Text(c, a.t("Backup: %s", a.removalResult.Backup)).FontSize(11).Selectable()
-				ui.Text(c, a.t("Reload extensions or restart the agent / start a new session to finish. Existing activity may remain until the session ends or expires.")).FontSize(12)
-			} else {
-				if p.Status == "ready" {
-					label := "Remove %d Presence hook command(s)."
-					if p.Kind == "entry" {
-						label = "Remove %d Presence entry file."
+			ui.Scroll(c).Scrollbars(false).Height(integrationScrollHeight(c)).Children(func() {
+				ui.Column(c).Gap(20).Children(func() {
+					if p.Kind != "managed" && !done {
+						a.integrationFileField(c, "removal-path", &a.removalPath, a.busy, func() {})
+					} else if p.Path != "" {
+						ui.Text(c, p.Path).Font("monospace").FontSize(11).Selectable()
 					}
-					ui.Text(c, a.t(label, p.Count)).FontSize(12)
-					details := strings.Join(p.Details, "\n")
-					ui.TextArea(c.Key("removal-details"), &details).Label(a.t("Removal preview")).ReadOnly(true).Height(140).Font("monospace").FontSize(11)
-					muted(c, a.t("A backup will be created before removal. Other hooks and settings will be preserved."))
-				} else if p.Status == "not-found" {
-					ui.Text(c, a.t("No integration found.")).FontSize(12)
-				} else {
-					ui.Text(c, a.t("Manual removal required.")).FontSize(12)
+					if !done && len(p.InstalledEvents) > 0 {
+						if p.Kind != "hooks" && ui.Checkbox(c, &a.removalAll, a.t("Remove entire integration")).Disabled(a.busy).Changed() {
+							a.removalSelected = map[string]bool{}
+							for _, event := range p.Catalog {
+								a.removalSelected[event.ID] = a.removalAll || !event.Required
+							}
+							a.removalDirty = true
+						}
+						if !a.removalAll {
+							var installed []integrationEvent
+							for _, event := range p.Catalog {
+								for _, id := range p.InstalledEvents {
+									if event.ID == id {
+										installed = append(installed, event)
+										break
+									}
+								}
+							}
+							ui.Column(c).Gap(7).Children(func() {
+								ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+									ui.Text(c, a.t("Events to remove")).FontSize(13).FontWeight(600).Grow(1)
+									ui.Button(c, a.t("Select all")).FontSize(11).Disabled(a.busy).OnClick(func() {
+										a.removalSelected = map[string]bool{}
+										for _, event := range installed {
+											if !event.Required {
+												a.removalSelected[event.ID] = true
+											}
+										}
+										a.removalDirty = true
+									})
+									ui.Button(c, a.t("Clear selection")).FontSize(11).Disabled(a.busy).OnClick(func() { a.removalSelected = map[string]bool{}; a.removalDirty = true })
+								})
+								muted(c, a.t("Select the events you want to remove."))
+							})
+							a.eventChoices(c, installed, a.removalSelected, true, func() { a.removalDirty = true })
+							if p.Kind != "hooks" {
+								muted(c, a.t("Required plugin events stay active. Related events are selected together."))
+							}
+						}
+					}
+					if done {
+						label := "Integration removed."
+						if p.Partial {
+							label = "Selected hooks removed."
+							if p.Kind != "hooks" {
+								label = "Selected plugin events disabled."
+							}
+						}
+						if p.ManualReview {
+							label = "Recognized hooks removed. Manual review is still required."
+						}
+						ui.Text(c, a.t(label)).TextColor(c.Theme().Success).Role(ui.RoleStatus)
+						if a.removalResult.Backup != "" {
+							ui.Text(c, a.t("Backup: %s", a.removalResult.Backup)).FontSize(11).Selectable()
+						}
+						ui.Text(c, a.t("Reload extensions or restart the agent / start a new session to finish. Existing activity may remain until the session ends or expires.")).FontSize(12)
+					} else {
+						if p.Status == "ready" && !a.removalDirty {
+							label := "Remove %d Presence hook command(s)."
+							if p.Kind == "entry" {
+								label = "Remove %d Presence entry file."
+							}
+							if p.Kind != "hooks" && !a.removalAll {
+								label = "Disable %d plugin event(s)."
+							}
+							ui.Text(c, a.t(label, p.Count)).FontSize(12)
+							details := strings.Join(p.Details, "\n")
+							ui.TextArea(c.Key("removal-details"), &details).Label(a.t("Removal preview")).ReadOnly(true).Height(140).Font("monospace").FontSize(11)
+							muted(c, a.t("Existing files will be backed up. Other hooks and settings will be preserved."))
+						} else if !a.removalDirty && p.Status == "not-found" {
+							ui.Text(c, a.t("No integration found.")).FontSize(12)
+						} else if !a.removalDirty {
+							ui.Text(c, a.t("Manual removal required.")).FontSize(12)
+						}
+					}
+					if !done || p.ManualReview {
+						ui.Text(c, a.t(p.Note)).FontSize(12)
+					}
+					if a.removalDirty {
+						muted(c, a.t("Preview the updated selection before removing it."))
+					} else {
+						for _, warning := range p.Warnings {
+							ui.Text(c, a.t(warning)).FontSize(11).TextColor(c.Theme().Warning)
+						}
+					}
+					if a.removalError != "" {
+						ui.Text(c, a.t(a.removalError)).TextColor(c.Theme().Danger).FontSize(12).Role(ui.RoleAlert)
+					}
+				})
+			})
+			ui.Row(c.Key("removal-actions")).Gap(10).AlignItems(ui.Center).Justify(ui.End).Padding(14, 0, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(c.Theme().Border).Children(func() {
+				if !done && !a.removalAll && len(p.InstalledEvents) > 0 {
+					muted(c, a.t("Selected %d event(s).", len(selectedIDs(p.Catalog, a.removalSelected)))).Grow(1)
 				}
-			}
-			if !done || p.ManualReview {
-				ui.Text(c, a.t(p.Note)).FontSize(12)
-			}
-			if a.removalError != "" {
-				ui.Text(c, a.t(a.removalError)).TextColor(c.Theme().Danger).FontSize(12).Role(ui.RoleAlert)
-			}
-			ui.Row(c.Key("removal-actions")).Gap(10).Justify(ui.End).Children(func() {
 				label := "Cancel"
 				if done || p.Status != "ready" {
 					label = "Close"
 				}
 				ui.Button(c, a.t(label)).Disabled(a.busy).OnClick(func() { a.removalOpen = false })
-				if p.Kind != "managed" && !done {
-					ui.Button(c, a.t("Preview again")).Disabled(a.busy || strings.TrimSpace(a.removalPath) == "").OnClick(func() {
-						a.dispatch(map[string]any{"action": "uninstall-preview", "agent": p.Agent, "path": a.removalPath}, "")
+				if (p.Kind != "managed" || !a.removalAll) && !done {
+					ui.Button(c, a.t("Preview again")).Disabled(a.busy || (p.Kind != "managed" && strings.TrimSpace(a.removalPath) == "") || (!a.removalAll && len(selectedIDs(p.Catalog, a.removalSelected)) == 0)).OnClick(func() {
+						request := map[string]any{"action": "uninstall-preview", "agent": p.Agent}
+						if p.Kind != "managed" {
+							request["path"] = a.removalPath
+						}
+						if !a.removalAll {
+							request["events"] = selectedIDs(p.Catalog, a.removalSelected)
+						}
+						a.dispatch(request, "")
 					})
 				}
 				if p.Status == "ready" && !done {
-					ui.Button(c, a.t("Remove integration")).TextColor(c.Theme().Danger).Disabled(a.busy || a.removalPath != p.Path).OnClick(func() {
-						a.dispatch(map[string]any{"action": "uninstall", "agent": p.Agent, "path": p.Path, "revision": p.Revision}, "")
+					label := "Remove integration"
+					if !a.removalAll && len(p.InstalledEvents) > 0 {
+						label = "Remove selected"
+					}
+					ui.Button(c, a.t(label)).TextColor(c.Theme().Danger).Disabled(a.busy || a.removalDirty || a.removalPath != p.Path).OnClick(func() {
+						request := map[string]any{"action": "uninstall", "agent": p.Agent, "path": p.Path, "revision": p.Revision}
+						if !a.removalAll {
+							request["events"] = p.SelectedEvents
+						}
+						a.dispatch(request, "")
 					})
 				}
 			})
@@ -896,7 +978,7 @@ func (a *nativeApp) trayView(c *ui.Context) {
 			ui.Text(c, a.t("Activity source")).FontSize(11).Grow(1)
 			ui.Button(c, a.t("Use automatic")).FontSize(10).Disabled(!a.pinned() || a.busy).OnClick(func() { a.dispatch(map[string]any{"action": "pin", "key": nil}, "") })
 		})
-		ui.Scroll(c).Grow(1).Children(func() {
+		ui.Scroll(c).Scrollbars(false).Grow(1).Children(func() {
 			ui.Column(c).Children(func() {
 				sessions := a.sessions()
 				for _, s := range sessions {

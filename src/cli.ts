@@ -5,6 +5,9 @@ import {startDaemon} from './daemon.js';
 import {request, summaryTarget, publishSummary} from './client.js';
 import {agents, type Agent} from './protocol.js';
 import {hookConfig, runHook} from './adapters/hooks.js';
+import {catalogFor, selectEvents} from './integration-events.js';
+import {eventFlags, runManagement} from './setup-cli.js';
+import {entryContent} from './integration-config.js';
 const help = `agent-discord-presence
 
   start                     Run the shared Discord presence service
@@ -18,6 +21,8 @@ const help = `agent-discord-presence
   config opencode|pi        Print a local plugin/extension entry file
   uninstall AGENT           Remove Presence hooks or a plugin/extension entry
   uninstall AGENT --dry-run Preview removal without changing any files
+  setup [AGENT]             Configure events (interactive by default)
+  events AGENT              List supported events and dependencies
   hook codex|claude-code    Receive a lifecycle hook on stdin
   prompt [PRESET]           Print the default prompt, preferences, and output schema
   preset list              List available configuration presets
@@ -29,7 +34,8 @@ const help = `agent-discord-presence
   config set KEY VALUE     Save summary, model, or presence settings
   config unset KEY         Restore a setting to its default
 
-Options: --path FILE (uninstall: project/custom integration file), --agent NAME (config show/set/unset, preset apply), --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
+Options: --path FILE (setup/uninstall), --profile recommended|lightweight, --events NAME,... (setup/uninstall/config), --interactive/-i (setup/uninstall)
+         --agent NAME (config show/set/unset, preset apply), --client-id ID, --socket PATH, --stale-minutes N (default 30, hooks only)
 Environment: DISCORD_CLIENT_ID, AGENT_PRESENCE_SOCKET, DISCORD_IPC_PATH, ADP_CONFIG
 `;
 async function main() {
@@ -39,6 +45,7 @@ async function main() {
     background: {type: 'boolean', short: 'b'},
     agent: {type: 'string'},
     path: {type: 'string'},
+    profile: {type: 'string'}, events: {type: 'string'}, interactive: {type: 'boolean', short: 'i'},
   }});
   const [command, argument] = positionals;
   const agent = values.agent as Agent | undefined;
@@ -46,23 +53,19 @@ async function main() {
   if (values.socket) process.env.AGENT_PRESENCE_SOCKET = values.socket;
   if (!command || values.help) { console.log(help); return; }
   if (values.background && command !== 'start') throw new Error('--background is only available for start');
-  if (values.path !== undefined && command !== 'uninstall') throw new Error('--path is only available for uninstall');
-  if (command === 'uninstall') {
-    if (!agents.includes(argument as Agent) || positionals.length !== 2) throw new Error('Use uninstall codex|claude-code|opencode|pi|deepseek-harness [--dry-run] [--path FILE]');
-    const {planUninstall, uninstallIntegration} = await import('./uninstall.js');
-    const result = values['dry-run']
-      ? {plan: await planUninstall(argument as Agent, values.path), removed: false}
-      : await uninstallIntegration(argument as Agent, values.path);
-    const {plan} = result;
-    if (plan.path) console.log(`File: ${plan.path}`);
-    if (plan.status === 'ready') {
-      console.log(`${result.removed ? 'Removed' : 'Would remove'} ${plan.count} Presence ${plan.kind === 'hooks' ? 'hook command(s)' : 'entry file'}.`);
-      for (const detail of plan.details) console.log(`  ${detail}`);
-      if ('backup' in result && result.backup) console.log(`Backup: ${result.backup}`);
-      if (result.removed) console.log('Reload extensions or restart the agent / start a new session to finish removing the integration. Existing activity may remain until the session ends or expires.');
-    }
-    console.log(plan.note);
-    if (plan.status === 'manual') process.exitCode = 1;
+  if (values.path !== undefined && !['setup', 'uninstall'].includes(command)) throw new Error('--path is only available for setup or uninstall');
+  const generator = command === 'config' && agents.includes(argument as Agent);
+  if (values.events !== undefined && !['setup', 'uninstall'].includes(command) && !generator) throw new Error('--events is only available for setup, uninstall, or config AGENT');
+  if (values.profile !== undefined && command !== 'setup' && !generator) throw new Error('--profile is only available for setup or config AGENT');
+  if (values.interactive && !['setup', 'uninstall'].includes(command)) throw new Error('--interactive is only available for setup or uninstall');
+  if (command === 'events') {
+    if (positionals.length !== 2) throw new Error('Use events AGENT');
+    for (const e of catalogFor(argument as Agent)) console.log(`${e.id}${e.required ? ' [required]' : ''}: ${e.description}${e.requires.length ? ` Requires: ${e.requires.join(', ')}` : ''}${e.source ? ` (${e.source})` : ''}`);
+    return;
+  }
+  if (command === 'setup' || command === 'uninstall') {
+    if ((argument !== undefined && !agents.includes(argument as Agent)) || positionals.length > 2) throw new Error(`Use ${command} codex|claude-code|opencode|pi|deepseek-harness [--events NAME,...] [--dry-run] [--path FILE]`);
+    await runManagement(command, argument, values);
     return;
   }
   if (command === 'summary' || command === 'clear-summary') {
@@ -124,10 +127,9 @@ async function main() {
       if (process.platform === 'win32') throw new Error('On Windows, install the CLI on PATH and use the bundled plugin hooks');
       const quote = (s: string) => "'" + s.replaceAll("'", "'\\''") + "'";
       const cli = `${quote(process.execPath)} ${quote(fileURLToPath(import.meta.url))}`;
-      console.log(JSON.stringify(hookConfig(argument, cli), null, 2));
+      console.log(JSON.stringify(hookConfig(argument, cli, selectEvents(argument, eventFlags(values))), null, 2));
     } else if (argument === 'opencode' || argument === 'pi') {
-      const path = new URL(`./adapters/${argument}.js`, import.meta.url).href;
-      console.log(argument === 'pi' ? `export { default } from ${JSON.stringify(path)};` : `export { AgentPresence } from ${JSON.stringify(path)};`);
+      console.log(entryContent(argument, selectEvents(argument, eventFlags(values))));
     } else throw new Error('Choose codex, claude-code, opencode, or pi');
     return;
   }

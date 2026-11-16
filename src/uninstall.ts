@@ -1,10 +1,13 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {constants} from 'node:fs';
-import {lstat, open, readFile, rename, stat, unlink, writeFile} from 'node:fs/promises';
+import {link, lstat, open, readFile, rename, stat, unlink, writeFile} from 'node:fs/promises';
 import {homedir} from 'node:os';
-import {basename, isAbsolute, join, resolve, sep} from 'node:path';
+import {basename, dirname, isAbsolute, join, resolve, sep} from 'node:path';
+import {mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {agents, type Agent} from './protocol.js';
+import {catalogFor, selectEvents, selectionWarnings, validateEvents, type IntegrationEvent} from './integration-events.js';
+import {entryContent, parseEntry, policyPath} from './integration-config.js';
 
 export interface UninstallPlan {
   agent: Agent;
@@ -16,6 +19,11 @@ export interface UninstallPlan {
   revision: string;
   note: string;
   manualReview: boolean;
+  installedEvents: string[];
+  selectedEvents: string[];
+  catalog: IntegrationEvent[];
+  warnings: string[];
+  partial: boolean;
 }
 export interface UninstallResult {plan: UninstallPlan; removed: boolean; backup?: string}
 
@@ -99,11 +107,12 @@ async function ownedHook(value: unknown, agent: Agent, identify: IdentifyFile): 
     (words.length === 4 && (words[0] === process.execPath || ['node', 'node.exe'].includes(basename(words[0]))) &&
       await identify(words[1], join('dist', 'cli.js')));
 }
-async function removeHooks(source: string, agent: Agent): Promise<{after: string; details: string[]; uncertain: boolean}> {
+export async function removeHooks(source: string, agent: Agent, selected?: string[]): Promise<{after: string; details: string[]; uncertain: boolean; installedEvents: string[]; removedEvents: string[]}> {
   const config: unknown = JSON.parse(source);
   if (!isObject(config) || (config.hooks !== undefined && !isObject(config.hooks))) throw new Error('Invalid hooks configuration');
   const details: string[] = [];
   const identify = installationFiles();
+  const installed = new Set<string>(), removed = new Set<string>();
   let uncertain = false;
   if (isObject(config.hooks)) {
     for (const [event, groups] of Object.entries(config.hooks)) {
@@ -114,7 +123,11 @@ async function removeHooks(source: string, agent: Agent): Promise<{after: string
         const hooks: unknown[] = [];
         for (const hook of group.hooks) {
           if (await ownedHook(hook, agent, identify)) {
-            details.push(`${event}: ${(hook as {command: string}).command}`); continue;
+            installed.add(event);
+            if (selected === undefined || selected.includes(event)) {
+              removed.add(event); details.push(`${event}: ${(hook as {command: string}).command}`); continue;
+            }
+            hooks.push(hook); continue;
           }
           if (referencesPresence(JSON.stringify(hook))) uncertain = true;
           hooks.push(hook);
@@ -130,34 +143,37 @@ async function removeHooks(source: string, agent: Agent): Promise<{after: string
   }
   const indent = source.match(/\n([\t ]+)"/)?.[1] ?? '  ';
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
-  return {after: JSON.stringify(config, null, indent).replaceAll('\n', newline) + newline, details, uncertain};
+  return {after: JSON.stringify(config, null, indent).replaceAll('\n', newline) + newline, details, uncertain,
+    installedEvents: [...installed], removedEvents: [...removed]};
 }
-async function ownedEntry(source: string, agent: 'pi' | 'opencode'): Promise<boolean> {
-  const name = agent === 'pi' ? 'default' : 'AgentPresence';
-  const match = source.trim().match(new RegExp(`^export\\s*\\{\\s*${name}\\s*\\}\\s*from\\s*("(?:[^"\\\\]|\\\\.)*"|'[^'\\\\]*')\\s*;?$`));
-  if (!match) return false;
-  let specifier: string;
-  try { specifier = match[1][0] === '"' ? JSON.parse(match[1]) : match[1].slice(1, -1); }
-  catch { return false; }
-  if (specifier === `agent-discord-presence/${agent}`) return true;
+export async function recognizedEntry(source: string, agent: 'pi' | 'opencode'): Promise<ReturnType<typeof parseEntry>> {
+  const entry = parseEntry(source, agent);
+  if (!entry) return;
+  const specifier = entry.source;
+  if (specifier === `agent-discord-presence/${agent}`) return entry;
   try {
     const url = new URL(specifier);
-    if (url.protocol !== 'file:' || url.search || url.hash) return false;
-    return await installationFiles()(fileURLToPath(url), join('dist', 'adapters', `${agent}.js`));
-  } catch { return false; }
+    if (url.protocol !== 'file:' || url.search || url.hash) return;
+    if (await installationFiles()(fileURLToPath(url), join('dist', 'adapters', `${agent}.js`))) return entry;
+  } catch { /* Unrecognized code is preserved. */ }
 }
 
-async function inspect(agent: Agent, path?: string) {
+async function inspect(agent: Agent, path?: string, events?: string[]) {
   if (!agents.includes(agent)) throw new Error('Unknown agent');
+  if (events !== undefined) events = validateEvents(agent, events, false);
   if (path !== undefined && (typeof path !== 'string' || !path.trim() || path.includes('\0'))) throw new Error('Invalid integration path');
   const plan: UninstallPlan = {agent, path: path === undefined ? integrationPath(agent) : resolve(path),
     status: 'not-found', kind: agent === 'codex' || agent === 'claude-code' ? 'hooks' : 'entry', count: 0, details: [], revision: '',
-    manualReview: false, note: 'No recognized integration was found at this path. Check project configuration and plugin-manager installations separately.'};
+    manualReview: false, installedEvents: [], selectedEvents: [], catalog: catalogFor(agent), warnings: [], partial: events !== undefined,
+    note: 'No recognized integration was found at this path. Check project configuration and plugin-manager installations separately.'};
   let before: string | undefined, after: string | undefined, mode = 0o600;
-  if (agent === 'deepseek-harness') {
+  if (agent === 'deepseek-harness' && events === undefined) {
     plan.kind = 'managed'; plan.status = 'manual'; plan.path = '';
+    try { plan.installedEvents = validateEvents(agent, JSON.parse(await readFile(policyPath(), 'utf8')).events); }
+    catch { plan.installedEvents = selectEvents(agent); }
     plan.note = 'Remove Agent Discord Presence using the Harness plugin manager in the profile where it was installed, then restart Harness.';
   } else {
+    if (agent === 'deepseek-harness') plan.path = policyPath();
     try {
       const info = await lstat(plan.path);
       if (!info.isFile() || info.isSymbolicLink()) {
@@ -169,7 +185,10 @@ async function inspect(agent: Agent, path?: string) {
         before = await readFile(plan.path, 'utf8');
         if (plan.kind === 'hooks') {
           try {
-            const patch = await removeHooks(before, agent);
+            const patch = await removeHooks(before, agent, events);
+            plan.installedEvents = patch.installedEvents;
+            plan.selectedEvents = patch.removedEvents;
+            plan.warnings = selectionWarnings(agent, patch.installedEvents.filter(id => !patch.removedEvents.includes(id)));
             if (patch.details.length) {
               after = patch.after; plan.details = patch.details; plan.status = 'ready';
               plan.manualReview = patch.uncertain;
@@ -182,49 +201,92 @@ async function inspect(agent: Agent, path?: string) {
           } catch {
             plan.status = 'manual'; plan.note = 'The hook configuration is invalid or unsupported. Review it manually; nothing was changed.';
           }
-        } else if (await ownedEntry(before, agent as 'opencode' | 'pi')) {
-          plan.status = 'ready'; plan.details = [before.trim()];
-          plan.note = 'The Presence plugin or extension entry file will be removed.';
         } else {
-          plan.status = 'manual'; plan.note = 'This file contains custom or unrecognized code. Review it manually; nothing was changed.';
+          const entry = agent === 'deepseek-harness'
+            ? {source: '', events: validateEvents(agent, JSON.parse(before).events)}
+            : await recognizedEntry(before, agent as 'opencode' | 'pi');
+          if (entry) {
+            plan.installedEvents = entry.events;
+            plan.selectedEvents = events === undefined ? entry.events : events.filter(id => entry.events.includes(id));
+            if (events !== undefined) {
+              const remaining = validateEvents(agent, entry.events.filter(id => !events.includes(id)));
+              if (plan.selectedEvents.length) {
+                after = agent === 'deepseek-harness' ? JSON.stringify({events: remaining}, null, 2) + '\n'
+                  : entryContent(agent as 'opencode' | 'pi', remaining) + '\n';
+                plan.details = plan.selectedEvents;
+                plan.status = 'ready';
+                plan.note = 'Selected plugin events will be disabled. Reload the agent to apply the change.';
+                plan.warnings = selectionWarnings(agent, remaining);
+              }
+            } else {
+              plan.status = 'ready'; plan.details = [before.trim()];
+              plan.note = 'The Presence plugin or extension entry file will be removed.';
+            }
+          } else {
+            plan.status = 'manual'; plan.note = 'This file contains custom or unrecognized code. Review it manually; nothing was changed.';
+          }
         }
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      if (agent === 'deepseek-harness' && events !== undefined) {
+        const installed = selectEvents(agent);
+        const remaining = validateEvents(agent, installed.filter(id => !events.includes(id)));
+        plan.installedEvents = installed; plan.selectedEvents = events;
+        if (events.length) {
+          after = JSON.stringify({events: remaining}, null, 2) + '\n';
+          plan.details = events; plan.status = 'ready';
+          plan.note = 'Selected plugin events will be disabled. Reload the agent to apply the change.';
+          plan.warnings = selectionWarnings(agent, remaining);
+        }
+      }
     }
   }
   plan.count = plan.details.length;
-  plan.revision = createHash('sha256').update(JSON.stringify([plan, before, after, mode])).digest('hex');
+  if (plan.status === 'not-found' && plan.installedEvents.length && events !== undefined) plan.note = 'No selected events are installed. Other integration events were left unchanged.';
+  plan.revision = createHash('sha256').update(JSON.stringify([plan, before, after, mode, events])).digest('hex');
   return {plan, before, after, mode};
 }
 
-export async function planUninstall(agent: Agent, path?: string): Promise<UninstallPlan> {
-  return (await inspect(agent, path)).plan;
+export async function planUninstall(agent: Agent, path?: string, events?: string[]): Promise<UninstallPlan> {
+  return (await inspect(agent, path, events)).plan;
 }
 
-/** Re-inspect at commit time, so a desktop confirmation never applies a stale plan. */
-export async function uninstallIntegration(agent: Agent, path?: string, revision?: string): Promise<UninstallResult> {
-  const {plan, before, after, mode} = await inspect(agent, path);
-  if (revision !== undefined && revision !== plan.revision) throw new Error('The integration file changed. Preview the removal again.');
-  if (plan.status !== 'ready' || before === undefined) return {plan, removed: false};
-  const backup = `${plan.path}.adp-backup-${randomUUID()}.bak`;
-  const temp = `${plan.path}.adp-${randomUUID()}.tmp`;
+export async function commitIntegrationFile(path: string, before: string | undefined, after: string | undefined, mode = 0o600): Promise<string | undefined> {
+  const backup = before === undefined ? undefined : `${path}.adp-backup-${randomUUID()}.bak`;
+  const temp = `${path}.adp-${randomUUID()}.tmp`;
   const unchanged = async () => {
-    const file = await open(plan.path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    if (before === undefined) {
+      try { await lstat(path); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+      throw new Error('The integration file changed. Preview the removal again.');
+    }
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
       if (!(await file.stat()).isFile() || await file.readFile('utf8') !== before) throw new Error('The integration file changed. Preview the removal again.');
     } finally { await file.close(); }
   };
   await unchanged();
-  // Backups are exclusive and private, and must succeed before any modification.
-  await writeFile(backup, before, {flag: 'wx', mode: 0o600});
+  await mkdir(dirname(path), {recursive: true, mode: 0o700});
+  if (backup) await writeFile(backup, before!, {flag: 'wx', mode: 0o600});
   try {
     if (after !== undefined) await writeFile(temp, after, {flag: 'wx', mode});
     await unchanged();
-    if (after === undefined) await unlink(plan.path);
-    else await rename(temp, plan.path);
+    if (after === undefined) await unlink(path);
+    else if (before === undefined) {
+      // Exclusive creation prevents a concurrently-created configuration from being replaced.
+      await link(temp, path);
+    } else await rename(temp, path);
   } finally {
     if (after !== undefined) await unlink(temp).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; });
   }
+  return backup;
+}
+
+/** Re-inspect at commit time, so a desktop confirmation never applies a stale plan. */
+export async function uninstallIntegration(agent: Agent, path?: string, revision?: string, events?: string[]): Promise<UninstallResult> {
+  const {plan, before, after, mode} = await inspect(agent, path, events);
+  if (revision !== undefined && revision !== plan.revision) throw new Error('The integration file changed. Preview the removal again.');
+  if (plan.status !== 'ready') return {plan, removed: false};
+  const backup = await commitIntegrationFile(plan.path, before, after, mode);
   return {plan, removed: true, backup};
 }

@@ -85,11 +85,29 @@ type snapshot struct {
 	ConfigPath, SocketPath, Version  string
 }
 type integration struct{ Agent, Path, Content, Instructions, Prompt string }
+type integrationEvent struct {
+	ID, Capability, Description, Source string
+	Required                            bool
+	Requires                            []string
+}
+type setupPlan struct {
+	Agent, Path, Kind, Status, Revision, Note                       string
+	SelectedEvents, InstalledEvents, Added, Removed, Kept, Warnings []string
+	Catalog                                                         []integrationEvent
+}
+type setupResult struct {
+	Plan    setupPlan
+	Changed bool
+	Backup  string
+}
 type uninstallPlan struct {
 	Agent, Path, Status, Kind, Revision, Note string
 	Count                                     int
 	Details                                   []string
 	ManualReview                              bool
+	Partial                                   bool
+	InstalledEvents, SelectedEvents, Warnings []string
+	Catalog                                   []integrationEvent
 }
 type uninstallResult struct {
 	Plan    uninstallPlan
@@ -101,6 +119,8 @@ type desktopResponse struct {
 	Error           string
 	Snapshot        *snapshot
 	Integration     *integration
+	SetupPlan       *setupPlan
+	SetupResult     *setupResult
 	UninstallPlan   *uninstallPlan
 	UninstallResult *uninstallResult
 }
@@ -125,31 +145,38 @@ type editor struct {
 }
 
 type nativeApp struct {
-	bridge           *Desktop
-	data             *snapshot
-	page, scope      string
-	edit             *editor
-	prefs            preferences
-	prefsPath        string
-	err, notice      string
-	busy, loading    bool
-	events           []recentEvent
-	setup            *integration
-	setupOpen        bool
-	setupMode        int
-	setupCopiedUntil time.Time
-	setupCopyError   string
-	removal          *uninstallPlan
-	removalResult    *uninstallResult
-	removalOpen      bool
-	removalPath      string
-	removalError     string
-	images           map[string]*ui.Bitmap
-	imagePending     map[string]bool
-	live             bool
-	closed           atomic.Bool
-	cancel           context.CancelFunc
-	updateTrayMenu   func()
+	bridge                              *Desktop
+	data                                *snapshot
+	page, scope                         string
+	edit                                *editor
+	prefs                               preferences
+	prefsPath                           string
+	err, notice                         string
+	busy, loading                       bool
+	events                              []recentEvent
+	setup                               *integration
+	setupOpen                           bool
+	setupMode                           int
+	setupCopiedUntil                    time.Time
+	setupCopyError                      string
+	setupPlan                           *setupPlan
+	setupResult                         *setupResult
+	setupPath, setupProfile, setupError string
+	setupSelected                       map[string]bool
+	setupDirty                          bool
+	removal                             *uninstallPlan
+	removalResult                       *uninstallResult
+	removalOpen                         bool
+	removalPath                         string
+	removalError                        string
+	removalSelected                     map[string]bool
+	removalAll, removalDirty            bool
+	images                              map[string]*ui.Bitmap
+	imagePending                        map[string]bool
+	live                                bool
+	closed                              atomic.Bool
+	cancel                              context.CancelFunc
+	updateTrayMenu                      func()
 	// Tests substitute a command runner without starting a GUI or a daemon.
 	dispatch func(map[string]any, string)
 }
@@ -237,6 +264,10 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 	a.err = ""
 	a.notice = ""
 	removing := request["action"] == "uninstall" || request["action"] == "uninstall-preview"
+	configuring := request["action"] == "setup" || request["action"] == "integration"
+	if configuring {
+		a.setupError = ""
+	}
 	if removing {
 		a.removalError = ""
 	}
@@ -255,6 +286,9 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 				if removing {
 					a.removalError = err.Error()
 				}
+				if configuring {
+					a.setupError = err.Error()
+				}
 			} else {
 				a.accept(result)
 				a.notice = notice
@@ -270,11 +304,23 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 }
 func (a *nativeApp) accept(response *desktopResponse) {
 	if response.UninstallPlan != nil {
+		opening := a.removal == nil || !a.removalOpen || a.removal.Agent != response.UninstallPlan.Agent
 		a.removalError = ""
 		a.removal = response.UninstallPlan
 		a.removalPath = response.UninstallPlan.Path
 		a.removalResult = nil
 		a.removalOpen = true
+		a.removalAll = !response.UninstallPlan.Partial
+		if response.UninstallPlan.Kind == "managed" {
+			a.removalAll = true
+		}
+		a.removalSelected = selectionMap(response.UninstallPlan.SelectedEvents)
+		a.removalDirty = false
+		if opening && !response.UninstallPlan.Partial && len(response.UninstallPlan.InstalledEvents) > 0 && len(response.UninstallPlan.Catalog) > 0 {
+			a.removalAll = false
+			a.removalSelected = map[string]bool{}
+			a.removalDirty = true
+		}
 	}
 	if response.UninstallResult != nil {
 		a.removalError = ""
@@ -288,6 +334,32 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		a.setupMode = 0
 		a.setupCopiedUntil = time.Time{}
 		a.setupCopyError = ""
+	}
+	if response.SetupPlan != nil {
+		a.setupPlan = response.SetupPlan
+		a.setupResult = nil
+		a.setupPath = response.SetupPlan.Path
+		a.setupSelected = selectionMap(response.SetupPlan.SelectedEvents)
+		a.setupProfile = "Custom"
+		all, light := true, true
+		for _, event := range response.SetupPlan.Catalog {
+			all = all && a.setupSelected[event.ID]
+			expected := event.Required || (event.Capability != "waiting" && event.Capability != "tools" && event.Capability != "summary")
+			light = light && a.setupSelected[event.ID] == expected
+		}
+		if all {
+			a.setupProfile = "Recommended"
+		} else if light {
+			a.setupProfile = "Lightweight"
+		}
+		a.setupDirty = false
+		a.setupError = ""
+		a.setupMode = 2
+	}
+	if response.SetupResult != nil {
+		a.setupResult = response.SetupResult
+		a.setupPlan = &response.SetupResult.Plan
+		a.setupError = ""
 	}
 	if response.Snapshot == nil {
 		return

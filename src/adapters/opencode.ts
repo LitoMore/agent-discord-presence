@@ -1,12 +1,15 @@
 import {Reporter} from '../client.js';
 import {boundedResponse} from '../completion.js';
+import {adapterEvents} from '../integration-config.js';
+import type {EventSelection} from '../integration-events.js';
 // The subset of OpenCode's plugin contract used here; no host runtime dependency.
 interface Event {type: string; properties: Record<string, unknown>}
 interface Host {directory: string}
 interface Entry {reporter: Reporter; busy: boolean; permissions: Set<string>; messageId?: string; parts: Map<string, string>}
-export const AgentPresence = async (_host: Host) => {
+const createAgentPresence = (options?: EventSelection) => async (_host: Host) => {
   if (process.env.ADP_SUMMARY_WORKER === '1') return {};
   const entries = new Map<string, Entry>();
+  const selected = adapterEvents('opencode', options);
   function get(id: string): Entry {
     let entry = entries.get(id);
     if (!entry) {
@@ -17,6 +20,7 @@ export const AgentPresence = async (_host: Host) => {
   }
   return {
     event: async ({event}: {event: Event}) => {
+      if (!selected.has(event.type)) return;
       const p = event.properties;
       const info = p.info as {id?: string; parentID?: string; sessionID?: string; role?: string; modelID?: string; providerID?: string} | undefined;
       if (event.type === 'server.instance.disposed') {
@@ -66,3 +70,4 @@ export const AgentPresence = async (_host: Host) => {
     },
   };
 };
+export const AgentPresence = Object.assign(createAgentPresence(), {withEvents: createAgentPresence});

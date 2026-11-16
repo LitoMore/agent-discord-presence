@@ -9,6 +9,7 @@ import {promisify} from 'node:util';
 import {hookConfig} from '../dist/adapters/hooks.js';
 import {integrationInstructions, handleDesktopRequest} from '../dist/desktop.js';
 import {planUninstall, uninstallIntegration} from '../dist/uninstall.js';
+import {parseEntry} from '../dist/integration-config.js';
 
 const exec = promisify(execFile);
 async function fixture(t) {
@@ -88,6 +89,11 @@ for (const agent of ['opencode', 'pi']) {
     assert.equal(result.removed, true);
     assert.equal(await readFile(result.backup, 'utf8'), source);
     await assert.rejects(stat(path), {code: 'ENOENT'});
+    await writeFile(path, source);
+    const events = agent === 'pi' ? ['ui_prompt_start', 'ui_prompt_end'] : ['permission.asked', 'permission.replied'];
+    assert.equal((await uninstallIntegration(agent, path, undefined, events)).removed, true);
+    const updated = parseEntry(await readFile(path, 'utf8'), agent);
+    assert.equal(updated.source, new URL(`../dist/adapters/${agent}.js`, import.meta.url).href);
   });
 }
 

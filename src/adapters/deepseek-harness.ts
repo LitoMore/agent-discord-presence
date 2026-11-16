@@ -1,6 +1,7 @@
 import {Reporter, request} from '../client.js';
 import {assistantText} from '../completion.js';
 import {harnessSummary, type HarnessLlm, type NativeSummaryJob} from '../native-summary.js';
+import {adapterEvents} from '../integration-config.js';
 
 // Structural subset of the Harness Cordis contract; no host runtime dependency.
 interface Agent {id: string; status: 'idle' | 'running'; options: {model?: string; provider?: string}}
@@ -22,6 +23,7 @@ export const name = 'agent-discord-presence';
 export const inject = ['llm'];
 export function apply(ctx: Context): void {
   if (process.env.ADP_SUMMARY_WORKER === '1') return;
+  const selected = adapterEvents('deepseek-harness');
   const entries = new Map<string, Entry>();
   const pending = new Map<Entry, {job: NativeSummaryJob; controller: AbortController}>();
   let running: Promise<void> | undefined;
@@ -63,7 +65,7 @@ export function apply(ctx: Context): void {
     return entry;
   }
   function publish(entry: Entry, completed = false): void {
-    entry.reporter.set(entry.failed ? 'error' : entry.approvals.size ? 'waiting' : entry.busy ? 'working' : 'idle', completed && !entry.failed ? entry.response : undefined);
+    entry.reporter.set(entry.failed && selected.has('agent/error') ? 'error' : entry.approvals.size ? 'waiting' : entry.busy ? 'working' : 'idle', completed && !entry.failed ? entry.response : undefined);
     if (completed) entry.response = '';
   }
   ctx.on('agent/created', ({agent}) => { publish(get(agent)); });
@@ -74,9 +76,11 @@ export function apply(ctx: Context): void {
     publish(entry, !entry.busy);
   });
   ctx.on('agent/error', ({agent}) => {
-    const entry = get(agent); cancel(entry); entry.failed = true; entry.response = ''; publish(entry);
+    const entry = get(agent); cancel(entry); entry.failed = true; entry.response = '';
+    if (selected.has('agent/error')) publish(entry);
   });
   ctx.on('session/event', (session, event) => {
+    if (!selected.has(event.type)) return;
     const entry = entries.get(session.id);
     if (!entry) return;
     if (event.type === 'turn/start') entry.response = '';

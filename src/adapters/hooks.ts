@@ -1,10 +1,8 @@
 import {emit} from '../client.js';
 import type {Agent, PresenceEvent, State} from '../protocol.js';
 import {boundedResponse} from '../completion.js';
-export const hookEvents = {
-  codex: ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'Stop', 'Interrupt', 'SessionEnd'],
-  'claude-code': ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'],
-} as const;
+import {hookEvents, validateEvents} from '../integration-events.js';
+export {hookEvents} from '../integration-events.js';
 export type HookAgent = keyof typeof hookEvents;
 export function hookEvent(agent: HookAgent, payload: Record<string, unknown>, now = Date.now()): PresenceEvent | undefined {
   if (typeof payload.session_id !== 'string' || !payload.session_id) return;
@@ -41,8 +39,8 @@ export async function runHook(agent: HookAgent): Promise<void> {
   } catch { /* Hooks are advisory and must emit no model context. */ }
   finally { clearTimeout(timer); process.stdin.destroy(); }
 }
-export function hookConfig(agent: HookAgent, command = 'agent-discord-presence'): object {
-  return {hooks: Object.fromEntries(hookEvents[agent].map(name => [name, [{hooks: [{
+export function hookConfig(agent: HookAgent, command = 'agent-discord-presence', events: readonly string[] = hookEvents[agent]): {hooks: Record<string, {hooks: {type: string; command: string; timeout: number; statusMessage?: string}[]}[]>} {
+  return {hooks: Object.fromEntries(validateEvents(agent, [...events]).map(name => [name, [{hooks: [{
     type: 'command', command: `${command} hook ${agent}`, timeout: 2,
     ...(agent === 'codex' ? {statusMessage: 'Agent Discord Presence'} : {}),
   }]}]]))};

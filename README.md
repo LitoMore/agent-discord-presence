@@ -61,7 +61,7 @@ npm run desktop:install
 npm run desktop
 ```
 
-Use **Agents → Setup** to copy an installation-specific prompt for your agent, or switch to **Manual configuration** to copy the hook or plugin configuration directly. Use **Agents → ⋯ → Remove integration…** to preview and remove Presence hooks or entry files, with a backup before each change. The CLI offers the same operation through `adp uninstall AGENT`, with `--dry-run` for a preview and `--path FILE` for project or custom configuration; see [removal details](USAGE.md#remove-an-agent-integration). The app shares the CLI's configuration and local socket. Closing the window keeps the app in the tray; quitting the app leaves the background service running. Use **Stop service** to stop it and clear its Discord activity.
+Use **Agents → Setup → Direct configuration** to choose a recommended, lightweight, or custom event selection, preview the changes, and apply them. **Agent prompt** and **Manual configuration** copy the selected setup instead. **Agents → ⋯ → Remove integration…** can remove the whole integration or just selected events. Existing files are backed up before changes. The CLI provides `adp setup` and `adp uninstall AGENT --interactive` wizards, plus `--profile`, `--events`, `--dry-run`, and `--path` for scripts; see [event selection](USAGE.md#choose-integration-events) and [removal details](USAGE.md#remove-an-agent-integration). The app shares the CLI's configuration and local socket. Closing the window keeps the app in the tray; quitting the app leaves the background service running. Use **Stop service** to stop it and clear its Discord activity.
 
 See the [desktop development guide](apps/desktop/README.md) for builds and the project structure.
 

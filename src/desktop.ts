@@ -7,6 +7,9 @@ import {loadSettings, saveSettings, resolveSettings, mergeSettings, settingsPath
 import {hookConfig} from './adapters/hooks.js';
 import type {DesktopRequest, DesktopResponse, DesktopSnapshot, IntegrationInstructions, ServiceStatus, SettingsScope} from './desktop-protocol.js';
 import {integrationPath, planUninstall, uninstallIntegration} from './uninstall.js';
+import {applySetup, hookCommand, planSetup, type SetupOptions} from './setup.js';
+import {selectEvents} from './integration-events.js';
+import {entryContent} from './integration-config.js';
 
 const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
 const quote = (s: string) => "'" + s.replaceAll("'", "'\\''") + "'";
@@ -29,30 +32,28 @@ export async function desktopSnapshot(): Promise<DesktopSnapshot> {
     agentSettings: Object.fromEntries(agents.map(agent => [agent, resolveSettings(configuration, agent)])) as DesktopSnapshot['agentSettings'],
     configPath: settingsPath(), socketPath: socketPath(), version: '0.0.3'};
 }
-function adapterInstructions(agent: Agent, chinese: boolean): Omit<IntegrationInstructions, 'prompt'> {
+function adapterInstructions(agent: Agent, chinese: boolean, options: SetupOptions): Omit<IntegrationInstructions, 'prompt'> {
   if (!agents.includes(agent)) throw new Error('Unknown agent');
   if (agent === 'codex' || agent === 'claude-code') {
     if (process.platform === 'win32') throw new Error('On Windows, install the CLI on PATH and use the bundled agent plugin hooks. See USAGE.md for setup.');
-    const command = `${quote(process.execPath)} ${quote(cli)}`;
-    return {agent, path: integrationPath(agent),
-      content: JSON.stringify(hookConfig(agent, command), null, 2),
+    return {agent, path: options.path ?? integrationPath(agent),
+      content: JSON.stringify(hookConfig(agent, hookCommand(), selectEvents(agent, options)), null, 2),
       instructions: agent === 'codex'
         ? chinese ? '将这些钩子合并到配置中，保留现有钩子。在 Codex /hooks 中检查并信任它们，然后开始新会话。' : 'Merge these hooks into your configuration, preserving existing hooks. Review and trust them in Codex /hooks, then start a new session.'
         : chinese ? '将这些钩子合并到配置中，保留现有设置，然后重启 Claude Code。' : 'Merge these hooks into your configuration, preserving existing settings, then restart Claude Code.'};
   }
   if (agent === 'opencode' || agent === 'pi') {
-    const source = new URL(`./adapters/${agent}.js`, import.meta.url).href;
-    return {agent, path: integrationPath(agent),
-      content: agent === 'pi' ? `export { default } from ${JSON.stringify(source)};` : `export { AgentPresence } from ${JSON.stringify(source)};`,
+    return {agent, path: options.path ?? integrationPath(agent),
+      content: entryContent(agent, selectEvents(agent, options)),
       instructions: chinese ? '将此内容保存到插件文件，然后重新加载扩展或重启智能体。' : 'Save this content to the plugin file, then reload extensions or restart your agent.'};
   }
   const root = fileURLToPath(new URL('../', import.meta.url));
-  return {agent, path: '', content: `dsh plugin --profile web add ${quote(root)}`,
+  return {agent, path: '', content: `${hookCommand()} setup deepseek-harness --events ${quote(selectEvents(agent, options).join(','))}\ndsh plugin --profile web add ${quote(root)}`,
     instructions: chinese ? '在终端中运行此命令，将 web 替换为你的 Harness 配置名称，然后重启 Harness。' : 'Run this command in your terminal, replacing web with your Harness profile, then restart Harness.'};
 }
-export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' = 'en'): IntegrationInstructions {
+export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' = 'en', options: SetupOptions = {}): IntegrationInstructions {
   const chinese = language === 'zh-CN';
-  const setup = adapterInstructions(agent, chinese);
+  const setup = adapterInstructions(agent, chinese, options);
   const root = fileURLToPath(new URL('../', import.meta.url));
   const prompt = (chinese ? [
     `请在这台电脑上为 ${labels[agent]} 配置 Agent Discord Presence。`,
@@ -69,6 +70,7 @@ export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' =
     '阅读本地 README 和配置指南，检查 Node.js 22+ 和 Discord 桌面客户端。复用这份安装，无需另行下载或重新构建桌面应用。',
     '',
     `只配置 ${labels[agent]}。先检查其现有配置，备份所有需要修改的文件，保留现有设置、钩子、插件和扩展，并避免重复集成。`,
+    `Presence 选定事件：${selectEvents(agent, options).join(', ')}。仅将 Presence 自身的集成调整为这些事件，移除未选中的 Presence 钩子或停用相应插件事件，保留其他集成。优先使用本地 CLI 的 setup 命令及 --events 参数，先 --dry-run 预览。`,
     ...(setup.path ? [`目标配置文件：${JSON.stringify(setup.path)}`] : []),
     setup.instructions,
     ...(agent === 'deepseek-harness' ? ['确定我使用的 Harness 配置名称，并将下方命令中的 web 替换为该名称。'] : []),
@@ -96,6 +98,7 @@ export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' =
     'Read the local README and setup guide, and check Node.js 22+ and the Discord desktop app. Reuse this installation rather than downloading another copy or rebuilding the desktop app.',
     '',
     `Configure only ${labels[agent]}. Inspect its existing configuration first, back up any file you change, preserve existing settings, hooks, plugins, and extensions, and avoid duplicate integrations.`,
+    `Selected Presence events: ${selectEvents(agent, options).join(', ')}. Reconcile only Presence's integration to this selection, removing deselected Presence hooks or disabling the corresponding plugin events while preserving other integrations. Prefer the local CLI setup command with --events, using --dry-run first.`,
     ...(setup.path ? [`Target configuration file: ${JSON.stringify(setup.path)}`] : []),
     setup.instructions,
     ...(agent === 'deepseek-harness' ? ['Determine which Harness profile I use and replace web in the command below with that profile.'] : []),
@@ -116,11 +119,18 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected desktop request');
     const message = value as DesktopRequest;
-    if (message.action === 'integration') return {ok: true, integration: integrationInstructions(message.agent, message.language)};
-    if (message.action === 'uninstall-preview') return {ok: true, uninstallPlan: await planUninstall(message.agent, message.path)};
+    if (message.action === 'integration') {
+      const setupPlan = await planSetup(message.agent, message);
+      return {ok: true, setupPlan, integration: integrationInstructions(message.agent, message.language, {events: setupPlan.selectedEvents, path: setupPlan.kind === 'policy' ? undefined : setupPlan.path})};
+    }
+    if (message.action === 'setup') {
+      if (typeof message.revision !== 'string' || !/^[a-f0-9]{64}$/.test(message.revision)) throw new Error('Preview the configuration before applying it.');
+      return {ok: true, setupResult: await applySetup(message.agent, message, message.revision)};
+    }
+    if (message.action === 'uninstall-preview') return {ok: true, uninstallPlan: await planUninstall(message.agent, message.path, message.events)};
     if (message.action === 'uninstall') {
       if (typeof message.revision !== 'string' || !/^[a-f0-9]{64}$/.test(message.revision)) throw new Error('Preview the integration removal before confirming it.');
-      return {ok: true, uninstallResult: await uninstallIntegration(message.agent, message.path, message.revision)};
+      return {ok: true, uninstallResult: await uninstallIntegration(message.agent, message.path, message.revision, message.events)};
     }
     if (message.action === 'start') {
       try { await request({type: 'status'}, undefined, 1500); }

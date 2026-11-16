@@ -8,6 +8,7 @@
 - [Images and display settings](#images-and-display-settings)
 - [Presence layout and manual summaries](#summary-title-layout)
 - [Connect your agents](#connect-your-agents)
+- [Choose integration events](#choose-integration-events)
 - [Remove an agent integration](#remove-an-agent-integration)
 - [Session selection](#session-selection-and-lifecycle)
 - [Configuration and platforms](#configuration-and-platform-notes)
@@ -346,6 +347,8 @@ Model integrations can import `summaryTarget` and `publishSummary` from `agent-d
 
 Start the shared service before using any adapter. Use one installation method per agent to avoid duplicate hooks. The `config codex|claude-code|opencode|pi` commands only print adapter configuration; `config set` saves this plugin’s summary settings. Generated configuration uses absolute paths to the installed package and, for hooks, the Node.js executable. Regenerate it if either location changes, such as after switching Node.js installations.
 
+For an interactive setup or selective event registration, see [Choose integration events](#choose-integration-events). `adp setup` can apply selected hooks or entry files directly, preserving other integrations and creating a backup before modifying an existing file.
+
 ### Codex
 
 Generate hooks with absolute executable paths:
@@ -419,6 +422,46 @@ Native summaries run one at a time per plugin instance with a bounded queue and 
 
 The adapter contract was checked against official Harness commit `0d1f50007f9bca3f52b06e1c3074fa14d5fb0720`; lifecycle integration tests use a simulated host and local daemon, not a live Harness/Discord connection. See the [official bundle installation contract](https://github.com/deepseek-ai/deepseek-harness/blob/0d1f50007f9bca3f52b06e1c3074fa14d5fb0720/docs/user/develop/basic/publish.md).
 
+## Choose integration events
+
+Use the setup wizard to choose an agent and its configuration. Custom mode accepts event numbers or names and includes required plugin callbacks and paired dependencies automatically:
+
+```sh
+adp setup
+adp setup codex
+adp events codex
+adp events pi
+```
+
+For scripts, select a profile or explicit events. Non-interactive setup without either selection fails immediately instead of waiting for input. Interactive setup previews changes and asks before applying them; explicit parameter-based setup applies the requested selection directly unless `--dry-run` is used.
+
+```sh
+adp setup codex --profile recommended --dry-run
+adp setup codex --profile lightweight
+adp setup codex --events SessionStart,UserPromptSubmit,Stop,SessionEnd
+adp setup claude-code --path .claude/settings.json --events UserPromptSubmit,Stop,SessionEnd
+adp setup pi --profile lightweight
+adp config codex --events Stop,SessionEnd
+adp config opencode --profile lightweight
+```
+
+`recommended` includes every supported event. `lightweight` keeps basic lifecycle, cleanup, and available error reporting, omitting optional tool updates, waiting status, and reply collection. Hooks collect replies through `Stop`, so lightweight Codex/Claude Code integrations still support automatic summaries. Lightweight OpenCode/Pi/Harness configurations do not collect replies. Existing automatic-summary settings are preserved; the preview explains when event selection prevents new summaries.
+
+Setup reads the actual target file and lists events to add, keep, and remove. An unchanged selection does not rewrite the file or create another backup. Existing selections are retained when no profile/events override is supplied to a preview. `config AGENT` continues to print configuration without installing it, and accepts `--profile` or `--events` too. Only events implemented by this version's adapter are offered; unsupported event names are rejected.
+
+| Agent | Selection behavior |
+| --- | --- |
+| Codex / Claude Code | Register individual hooks. All are optional; previews explain degraded status, summary, and cleanup behavior. |
+| OpenCode | Select event processing within its unified plugin entry. Session status and cleanup callbacks remain required. |
+| Pi | Select optional `pi.on()` subscriptions. `agent_settled` and the core session lifecycle remain required. |
+| DeepSeek Harness | Select optional agent events and nested `session/event` payloads. Disposal, unload, and essential lifecycle callbacks remain required. |
+
+Permission/prompt start and completion callbacks must be selected together for plugin adapters. Reply collection can also require multiple callbacks. `adp events AGENT` shows these dependencies; explicit CLI selections must include them. The desktop selector and wizard include related callbacks together.
+
+In the desktop app, **Agents → Setup → Direct configuration** shows event checkboxes immediately, using the same grouped cards and scrolling layout as removal. Choose a **Recommended**, **Lightweight**, or **Custom** profile, toggle a group heading to select its optional events together, or select events individually. **Select all** and **Clear selection** provide shortcuts; required plugin events stay enabled. The fixed footer shows the selected count and preview/apply actions. After changing a selection or path, choose **Preview configuration**, review the add/keep/remove lists and functional consequences, then **Apply configuration**. **Agent prompt** and **Manual configuration** copy the last previewed selection; copying does not mark it installed. Existing files receive a private backup, and changed files require a fresh preview.
+
+OpenCode and Pi store custom choices in their generated entry files; partial edits use this installation's adapter so its event-selection API is available. Reload the extension/plugin after changes. Harness stores its choices in `integrations/deepseek-harness.json` next to the Presence config file (`ADP_CONFIG` or its default). `adp setup deepseek-harness --profile lightweight` saves this policy; install/update the plugin separately using the Harness profile you use, and reload it. The Harness process must use the same `ADP_CONFIG` when that path is customized. This command does not register the plugin with Harness or confirm that it is loaded.
+
 ## Remove an agent integration
 
 Remove Presence hooks, plugins, or extensions with the CLI:
@@ -430,6 +473,18 @@ adp uninstall claude-code
 adp uninstall opencode
 adp uninstall pi
 ```
+
+To remove only some hooks or disable optional plugin events, pass `--events` or use the removal wizard:
+
+```sh
+adp uninstall codex --events PreToolUse,PostToolUse --dry-run
+adp uninstall codex --events PreToolUse,PostToolUse
+adp uninstall pi --events ui_prompt_start,ui_prompt_end
+adp uninstall deepseek-harness --events approval/asked,approval/decided
+adp uninstall codex --interactive
+```
+
+With `--events`, other registered events remain active. For plugins, the command rewrites the recognized entry or Harness policy to disable those events and preserves required callbacks. Dependent events must be disabled together. Without `--events`, the original whole-integration removal behavior is retained. The interactive wizard offers event numbers/names or `all` for the entire integration.
 
 By default, these commands inspect the user-level files listed in the setup instructions above. To remove a project-level integration or use a custom location, specify the exact file:
 
@@ -443,7 +498,7 @@ adp uninstall opencode --path .opencode/plugins/agent-presence.ts
 
 Automatic recognition covers `adp hook AGENT`, `agent-discord-presence hook AGENT`, and hooks generated for the current CLI installation, including `ADP_CONFIG` and `AGENT_PRESENCE_SOCKET` assignment prefixes and an optional `env` launcher. Hooks and entry exports referencing another checkout, npm installation, or desktop app bundle are also recognized when that installation's package metadata and target file verify its identity. Detection never executes the referenced code. Package exports `agent-discord-presence/opencode` and `agent-discord-presence/pi` are supported too. Shell wrappers, missing or unverifiable installations, and modified commands require manual review. If recognized hooks coexist with possible unrecognized Presence hooks, the recognized hooks are removed and the output asks you to review the rest. A configuration that can only be handled manually exits with status 1.
 
-In the desktop app, open **Agents → ⋯ → Remove integration…** for an agent. Review the file path and removal preview, then confirm **Remove integration**. You can enter a project or custom path and choose **Preview again** before confirming. The app checks that the file still matches the preview, displays any error in the dialog, and shows the backup path after removal. **No sessions detected** does not indicate whether an integration is installed.
+In the desktop app, open **Agents → ⋯ → Remove integration…** for an agent. The installed events appear immediately as checkboxes, initially unselected. Select the events to remove/disable, or use **Select all** / **Clear selection**. Choose **Preview again**, review the changes, then confirm **Remove selected**. Required plugin callbacks stay active for a partial removal; **Remove entire integration** is a separate option for deleting a plugin entry altogether. Changing a path or selection requires a fresh preview. The app checks that the file still matches the preview, displays any error in the dialog, and shows the backup path after modifying an existing file. **No sessions detected** does not indicate whether an integration is installed.
 
 For DeepSeek Harness, remove Presence through Harness's plugin manager in the profile where you installed it; the desktop dialog and `adp uninstall deepseek-harness` provide this guidance. Integrations loaded through Codex/Claude Code plugin managers or command-line plugin options also need to be removed through their original installation mechanism; the command edits hook configuration, not plugin registrations. Stop passing `--plugin-dir` to Claude Code or `-e` to Pi for one-off loads.
 

@@ -3,6 +3,7 @@ import type {Activity} from './presentation.js';
 import type {Configuration, Settings, SettingsLayer} from './settings.js';
 import type {Summary} from './summary.js';
 import type {UninstallPlan, UninstallResult} from './uninstall.js';
+import type {SetupOptions, SetupPlan, SetupResult} from './setup.js';
 
 export interface DiscordProfile {id: string; username: string; globalName?: string; avatar?: string}
 export interface DesktopSession {
@@ -25,8 +26,9 @@ export type DesktopRequest =
   | {action: 'pin'; key: string | null}
   | {action: 'save'; scope: SettingsScope; patch: SettingsLayer; unset?: ('presence.assets.large_image')[]}
   | {action: 'reset'; scope: SettingsScope; keys: (keyof SettingsLayer)[]}
-  | {action: 'integration'; agent: Agent; language?: 'en' | 'zh-CN'}
-  | {action: 'uninstall-preview'; agent: Agent; path?: string}
-  | {action: 'uninstall'; agent: Agent; path?: string; revision: string};
+  | ({action: 'integration'; agent: Agent; language?: 'en' | 'zh-CN'} & SetupOptions)
+  | ({action: 'setup'; agent: Agent; revision: string} & SetupOptions)
+  | {action: 'uninstall-preview'; agent: Agent; path?: string; events?: string[]}
+  | {action: 'uninstall'; agent: Agent; path?: string; revision: string; events?: string[]};
 export interface IntegrationInstructions {agent: Agent; path: string; content: string; instructions: string; prompt: string}
-export type DesktopResponse = {ok: true; snapshot?: DesktopSnapshot; integration?: IntegrationInstructions; uninstallPlan?: UninstallPlan; uninstallResult?: UninstallResult} | {ok: false; error: string};
+export type DesktopResponse = {ok: true; snapshot?: DesktopSnapshot; integration?: IntegrationInstructions; setupPlan?: SetupPlan; setupResult?: SetupResult; uninstallPlan?: UninstallPlan; uninstallResult?: UninstallResult} | {ok: false; error: string};

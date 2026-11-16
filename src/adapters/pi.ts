@@ -1,19 +1,22 @@
 import {Reporter} from '../client.js';
 import {assistantText} from '../completion.js';
+import {adapterEvents} from '../integration-config.js';
+import type {EventSelection} from '../integration-events.js';
 interface Context {sessionManager: {getSessionId(): string}; isIdle(): boolean; model?: {id: string; provider: string}}
 interface ExtensionAPI {on(event: string, handler: (event: unknown, context: Context) => void | Promise<void>): void}
-export default function presence(pi: ExtensionAPI): void {
+export default function presence(pi: ExtensionAPI, options?: EventSelection): void {
   if (process.env.ADP_SUMMARY_WORKER === '1') return;
   let reporter: Reporter | undefined;
   let waiting = false;
   let response = '';
+  const selected = adapterEvents('pi', options);
   pi.on('session_start', async (_event, ctx) => {
     await reporter?.close();
     reporter = new Reporter('pi', ctx.sessionManager.getSessionId());
     waiting = false; response = ''; reporter.set(ctx.isIdle() ? 'idle' : 'working');
   });
   pi.on('agent_start', () => { response = ''; reporter?.set(waiting ? 'waiting' : 'working'); });
-  pi.on('message_end', event => {
+  if (selected.has('message_end')) pi.on('message_end', event => {
     const text = assistantText((event as {message?: unknown})?.message);
     if (text) response = text;
   });
@@ -22,7 +25,7 @@ export default function presence(pi: ExtensionAPI): void {
     if (reporter) { reporter.model = ctx.model?.id; reporter.provider = ctx.model?.provider; }
     reporter?.set(waiting ? 'waiting' : 'idle', waiting ? undefined : response); response = '';
   });
-  pi.on('ui_prompt_start', () => { waiting = true; reporter?.set('waiting'); });
-  pi.on('ui_prompt_end', (_event, ctx) => { waiting = false; reporter?.set(ctx.isIdle() ? 'idle' : 'working'); });
+  if (selected.has('ui_prompt_start')) pi.on('ui_prompt_start', () => { waiting = true; reporter?.set('waiting'); });
+  if (selected.has('ui_prompt_end')) pi.on('ui_prompt_end', (_event, ctx) => { waiting = false; reporter?.set(ctx.isIdle() ? 'idle' : 'working'); });
   pi.on('session_shutdown', async () => { await reporter?.close(); reporter = undefined; waiting = false; });
 }
