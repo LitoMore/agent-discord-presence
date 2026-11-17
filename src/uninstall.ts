@@ -9,6 +9,7 @@ import {agents, type Agent} from './protocol.js';
 import {pluginPolicy} from './agent-plugins.js';
 import {catalogFor, selectEvents, selectionWarnings, validateEvents, type IntegrationEvent} from './integration-events.js';
 import {entryContent, parseEntry, policyPath, policyManaged, policyContent} from './integration-config.js';
+import {nodeLauncher} from './node-runtime.js';
 
 export interface UninstallPlan {
   agent: Agent;
@@ -105,11 +106,14 @@ async function ownedHook(value: unknown, agent: Agent, identify: IdentifyFile): 
   // Setup prompts explicitly carry these two settings into agent hooks.
   while (/^(?:ADP_CONFIG|AGENT_PRESENCE_SOCKET)=/.test(words[0] ?? '')) words.shift();
   if (words.at(-2) !== 'hook' || words.at(-1) !== agent) return false;
+  if (words.length === 8 && words[0] === '/bin/sh' && words[1] === '-c' && words[2] === nodeLauncher && words[3] === 'adp-node') {
+    return await identify(words[5], join('dist', 'cli.js'));
+  }
   return (words.length === 3 && ['adp', 'agent-discord-presence'].includes(words[0])) ||
     (words.length === 4 && (words[0] === process.execPath || ['node', 'node.exe'].includes(basename(words[0]))) &&
       await identify(words[1], join('dist', 'cli.js')));
 }
-export async function removeHooks(source: string, agent: Agent, selected?: string[]): Promise<{after: string; details: string[]; uncertain: boolean; installedEvents: string[]; removedEvents: string[]}> {
+export async function removeHooks(source: string, agent: Agent, selected?: string[], replacementCommand?: string): Promise<{after: string; details: string[]; uncertain: boolean; installedEvents: string[]; removedEvents: string[]}> {
   const config: unknown = JSON.parse(source);
   if (!isObject(config) || (config.hooks !== undefined && !isObject(config.hooks))) throw new Error('Invalid hooks configuration');
   const details: string[] = [];
@@ -129,12 +133,12 @@ export async function removeHooks(source: string, agent: Agent, selected?: strin
             if (selected === undefined || selected.includes(event)) {
               removed.add(event); details.push(`${event}: ${(hook as {command: string}).command}`); continue;
             }
-            hooks.push(hook); continue;
+            hooks.push(replacementCommand === undefined ? hook : {...hook as Record<string, unknown>, command: replacementCommand}); continue;
           }
           if (referencesPresence(JSON.stringify(hook))) uncertain = true;
           hooks.push(hook);
         }
-        if (hooks.length === group.hooks.length) { remaining.push(group); continue; }
+        if (hooks.length === group.hooks.length) { remaining.push({...group, hooks}); continue; }
         // A matcher group with no hooks cannot execute anything. Retain every
         // group that still contains another hook, including all its metadata.
         if (hooks.length) remaining.push({...group, hooks});

@@ -40,7 +40,12 @@ cd ../..
 npm run desktop:build
 ```
 
-MyGo writes packaged apps to `apps/desktop/build/`. The package includes the compiled service, prompts, presets, package metadata, setup documentation, and agent plugins. Node.js 22+ remains a runtime prerequisite for the shared service. Finder launches locate Node on PATH, `/opt/homebrew/bin/node`, or `/usr/local/bin/node`; set `ADP_NODE` for another installation. Configure release signing and notarization separately before distribution.
+MyGo writes packaged apps to `apps/desktop/build/`. The package includes the compiled service, prompts, presets, package metadata, setup documentation, and agent plugins. Node.js 22+ remains a runtime prerequisite for the shared service. Node discovery respects `ADP_NODE`, then PATH. On macOS/Linux, a GUI launch without Node on PATH asks the user's interactive login shell once (with a three-second timeout), allowing initialized nvm, fnm, and other managers to supply Node. Additional fallbacks cover manager environment variables, user shims, and common installer locations. Windows discovery also checks nvm-windows/fnm/Volta environment paths and official installer locations. Set `ADP_NODE` to an executable path for a custom installation; an invalid explicit override reports an error. Generated macOS/Linux hooks resolve Node again in the agent's environment, retain a stable installer symlink when available, and can be refreshed by reapplying setup. Windows hooks continue to use the bundled PATH-based plugins; direct hook configuration generation targets POSIX shells. Configure release signing and notarization separately before distribution.
+
+On Windows, commands copied from the desktop setup dialog use PowerShell quoting
+and the discovered Node executable. Hook-file generation keeps its existing
+POSIX-only restriction. Node bridge and summary processes run without visible
+console windows.
 
 ## Structure
 

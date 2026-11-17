@@ -20,7 +20,7 @@ func TestWorkerRoundTripAndRecovery(t *testing.T) {
 for await (const line of createInterface({input:process.stdin})) {
   if (line.includes('stall')) await new Promise(resolve => setTimeout(resolve, 60000));
   else if (line.includes('large')) process.stdout.write(JSON.stringify({payload:'x'.repeat(2*1024*1024)})+'\n');
-  else process.stdout.write(JSON.stringify({echo:JSON.parse(line)})+'\n');
+  else process.stdout.write(JSON.stringify({echo:JSON.parse(line),nodeHint:process.env.ADP_NODE_HINT})+'\n');
 }`
 	if err := os.WriteFile(path, []byte(source), 0600); err != nil {
 		t.Fatal(err)
@@ -32,6 +32,9 @@ for await (const line of createInterface({input:process.stdin})) {
 	result, err := d.Call(context.Background(), `{"action":"snapshot"}`)
 	if err != nil || !strings.Contains(result, `"snapshot"`) {
 		t.Fatalf("round trip: %q, %v", result, err)
+	}
+	if !strings.Contains(result, `"nodeHint":`) {
+		t.Fatal("worker lost the discovered Node launch path")
 	}
 	if _, err := d.Call(context.Background(), "{}\n{}"); err == nil {
 		t.Fatal("accepted a multi-line request")

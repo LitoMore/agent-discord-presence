@@ -7,13 +7,13 @@ import {loadSettings, saveSettings, resolveSettings, mergeSettings, settingsPath
 import {hookConfig} from './adapters/hooks.js';
 import type {DesktopRequest, DesktopResponse, DesktopSnapshot, IntegrationInstructions, ServiceStatus, SettingsScope} from './desktop-protocol.js';
 import {integrationPath, planUninstall, uninstallIntegration} from './uninstall.js';
-import {applySetup, hookCommand, planSetup, type SetupOptions} from './setup.js';
+import {applySetup, hookCommand, managementCommand, planSetup, type SetupOptions} from './setup.js';
 import {selectEvents, scenarioSelection, validateSummaryTriggers} from './integration-events.js';
 import {entryContent} from './integration-config.js';
 import {listAgents, listPlugins, installPlugin, changePlugin, getPlugin, pluginSetup, pluginPolicy} from './agent-plugins.js';
 
 const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
-const quote = (s: string) => "'" + s.replaceAll("'", "'\\''") + "'";
+const quote = (s: string) => "'" + s.replaceAll("'", process.platform === 'win32' ? "''" : "'\\''") + "'";
 function scopeAgent(scope: SettingsScope): Agent | undefined {
   if (scope === 'global') return;
   if (!listAgents().some(a => a.id === scope)) throw new Error('Unknown settings scope');
@@ -51,7 +51,7 @@ function adapterInstructions(agent: Agent, chinese: boolean, options: SetupOptio
       instructions: chinese ? '将此内容保存到插件文件，然后重新加载扩展或重启智能体。' : 'Save this content to the plugin file, then reload extensions or restart your agent.'};
   }
   const root = fileURLToPath(new URL('../', import.meta.url));
-  return {agent, path: '', content: `${hookCommand()} setup deepseek-harness --events ${quote(selectEvents(agent, options).join(','))}\ndsh plugin --profile web add ${quote(root)}`,
+  return {agent, path: '', content: `${managementCommand()} setup deepseek-harness --events ${quote(selectEvents(agent, options).join(','))}\ndsh plugin --profile web add ${quote(root)}`,
     instructions: chinese ? '在终端中运行此命令，将 web 替换为你的 Harness 配置名称，然后重启 Harness。' : 'Run this command in your terminal, replacing web with your Harness profile, then restart Harness.'};
 }
 export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' = 'en', options: SetupOptions = {}): IntegrationInstructions {
@@ -64,10 +64,7 @@ export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' =
       if (options.scenarios !== undefined) options = {...options, ...scenarioSelection(agent, options.scenarios), scenarios: undefined};
       const events = selectEvents(agent, options);
       const triggers = options.summaryTriggers === undefined ? '' : ` --summary-triggers=${quote(validateSummaryTriggers(options.summaryTriggers).join(','))}`;
-      const psQuote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
-      const command = process.platform === 'win32'
-        ? `$env:ADP_CONFIG = ${psQuote(settingsPath())}; $env:AGENT_PRESENCE_SOCKET = ${psQuote(socketPath())}; & ${psQuote(process.execPath)} ${psQuote(cli)}`
-        : hookCommand();
+      const command = managementCommand();
       const content = `${command} setup ${agent} --events ${quote(events.join(','))}${triggers}\n${setup.content}`;
       return {agent, path: '', content, instructions: setup.instructions, prompt: (chinese
         ? `请为 ${plugin.name} 配置 Presence 集成。保留现有配置，先预览再应用下列事件策略，然后安装或重新加载 Agent 端插件。\n`
@@ -79,7 +76,7 @@ export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' =
   }
   if (!listAgents().some(a => a.id === agent && a.enabled)) throw new Error('Unknown or disabled agent');
   if (options.scenarios !== undefined) options = {...options, ...scenarioSelection(agent, options.scenarios), scenarios: undefined};
-  const summaryCommand = options.summaryTriggers === undefined ? undefined : `${hookCommand()} config set summaryTriggers ${quote(JSON.stringify(validateSummaryTriggers(options.summaryTriggers)))} --agent ${agent}`;
+  const summaryCommand = options.summaryTriggers === undefined ? undefined : `${managementCommand()} config set summaryTriggers ${quote(JSON.stringify(validateSummaryTriggers(options.summaryTriggers)))} --agent ${agent}`;
   const setup = adapterInstructions(agent, chinese, options);
   const root = fileURLToPath(new URL('../', import.meta.url));
   const prompt = (chinese ? [

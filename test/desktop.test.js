@@ -1,12 +1,35 @@
 import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm,copyFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {spawn} from 'node:child_process';
+import {spawn,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {managementCommand} from '../dist/setup.js';
 import {handleDesktopRequest,desktopSnapshot,integrationInstructions} from '../dist/desktop.js';
 import {request} from '../dist/client.js';
+
+test('Windows management commands execute with quoted Node, config and socket paths', {skip:process.platform!=='win32'}, async t=>{
+  const dir=await mkdtemp(join(tmpdir(),"adp Windows ' quoted "));
+  const before=Object.fromEntries(['ADP_CONFIG','AGENT_PRESENCE_SOCKET','ADP_NODE'].map(key=>[key,process.env[key]]));
+  t.after(async()=>{for(const [key,value]of Object.entries(before)){if(value===undefined)delete process.env[key];else process.env[key]=value;}await rm(dir,{recursive:true,force:true});});
+  const node=join(dir,"Node's runtime.exe");await copyFile(process.execPath,node);
+  process.env.ADP_NODE=node;
+  process.env.ADP_CONFIG=join(dir,"settings's config.json");
+  process.env.AGENT_PRESENCE_SOCKET=`\\\\.\\pipe\\adp-windows-command-${process.pid}`;
+  await writeFile(process.env.ADP_CONFIG,JSON.stringify({model:'Windows command fixture'}));
+  const command=managementCommand()+' config show --agent pi';
+  const result=await promisify(execFile)('powershell.exe',['-NoProfile','-NonInteractive','-Command',command],{windowsHide:true,timeout:10000});
+  assert.equal(JSON.parse(result.stdout).model,'Windows command fixture');
+  assert.equal(result.stderr,'');
+  for(const agent of ['pi','opencode','deepseek-harness']){
+    const response=await handleDesktopRequest({action:'integration',agent,path:agent==='deepseek-harness'?undefined:join(dir,agent+'.mjs')});
+    assert.equal(response.ok,true,response.error);
+    assert.ok(response.integration.summaryCommand.startsWith('$env:ADP_CONFIG = '));
+    if(agent==='deepseek-harness')assert.ok(response.integration.content.startsWith('$env:ADP_CONFIG = '));
+  }
+});
 
 test('desktop uses the real daemon for lifecycle, pinning, and scoped settings without replacing unrelated config',async t=>{
   const dir=await mkdtemp(join(tmpdir(),'adp-desktop-'));
