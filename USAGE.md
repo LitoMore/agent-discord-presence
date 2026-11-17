@@ -345,13 +345,13 @@ Model integrations can import `summaryTarget` and `publishSummary` from `agent-d
 
 ## Connect your agents
 
-Start the shared service before using any adapter. Use one installation method per agent to avoid duplicate hooks. The `config codex|claude-code|opencode|pi` commands only print adapter configuration; `config set` saves this plugin’s summary settings. Generated configuration uses absolute paths to the installed package and, for hooks, the Node.js executable. Regenerate it if either location changes, such as after switching Node.js installations.
+Start the shared service before using any adapter. Use one installation method per agent to avoid duplicate hooks. The `config codex|claude-code|opencode|pi` commands only print adapter configuration; `config set` saves this plugin’s summary settings. Generated configuration uses absolute paths to the installed package. On macOS/Linux, hooks resolve Node.js at execution time: `ADP_NODE` overrides everything, followed by `node` on the agent's PATH, then the executable saved during setup. Setup preserves a matching PATH symlink instead of Node's resolved version directory, so installer upgrades do not invalidate that stable entry. This works with official installers and package/version managers without requiring a particular one. The agent must have Node.js 22+ on PATH after a version switch; GUI applications may need restarting to inherit the updated environment. If the package moves, or a saved fallback disappears while the agent has no Node on PATH, rerun setup. Reapplying setup refreshes existing recognized Presence hook commands, preserves their other options and unrelated hooks, and backs up changes.
 
 For an interactive setup or selective event registration, see [Choose integration events](#choose-integration-events). `adp setup` can apply selected hooks or entry files directly, preserving other integrations and creating a backup before modifying an existing file.
 
 ### Codex
 
-Generate hooks with absolute executable paths:
+Generate hooks with a runtime Node lookup and an absolute package path:
 
 ```sh
 adp config codex
@@ -513,7 +513,7 @@ adp uninstall opencode --path .opencode/plugins/agent-presence.ts
 
 `--dry-run` lists the recognized commands or entry file without writing anything. Removal creates a private, byte-for-byte backup next to the original file (`FILE.adp-backup-UUID.bak`) and prints its path. Hook removal preserves unrelated settings and other hooks, including hooks sharing the same event or matcher group. The hook file must be valid JSON; unsupported or invalid configurations are left for manual review. OpenCode and Pi entry files are deleted only when their entire content is a recognized Presence export; files containing custom code are left untouched. Repeating removal when nothing is installed succeeds without creating another backup.
 
-Automatic recognition covers `adp hook AGENT`, `agent-discord-presence hook AGENT`, and hooks generated for the current CLI installation, including `ADP_CONFIG` and `AGENT_PRESENCE_SOCKET` assignment prefixes and an optional `env` launcher. Hooks and entry exports referencing another checkout, npm installation, or desktop app bundle are also recognized when that installation's package metadata and target file verify its identity. Detection never executes the referenced code. Package exports `agent-discord-presence/opencode` and `agent-discord-presence/pi` are supported too. Shell wrappers, missing or unverifiable installations, and modified commands require manual review. If recognized hooks coexist with possible unrecognized Presence hooks, the recognized hooks are removed and the output asks you to review the rest. A configuration that can only be handled manually exits with status 1.
+Automatic recognition covers `adp hook AGENT`, `agent-discord-presence hook AGENT`, and hooks generated for the current CLI installation, including `ADP_CONFIG` and `AGENT_PRESENCE_SOCKET` assignment prefixes and an optional `env` launcher. The exact generated runtime Node launcher is recognized too; modified launchers and arbitrary shell wrappers require manual review. Hooks and entry exports referencing another checkout, npm installation, or desktop app bundle are also recognized when that installation's package metadata and target file verify its identity. Detection never executes the referenced code. Package exports `agent-discord-presence/opencode` and `agent-discord-presence/pi` are supported too. Missing or unverifiable installations and modified commands require manual review. If recognized hooks coexist with possible unrecognized Presence hooks, the recognized hooks are removed and the output asks you to review the rest. A configuration that can only be handled manually exits with status 1.
 
 In the desktop app, open **Agents → ⋯ → Remove integration…** for an agent. The installed events appear immediately as checkboxes, initially unselected. Select the events to remove/disable, or use **Select all** / **Clear selection**. Choose **Preview again**, review the changes, then confirm **Remove selected**. Required plugin callbacks stay active for a partial removal; **Remove entire integration** is a separate option for deleting a plugin entry altogether. Changing a path or selection requires a fresh preview. The app checks that the file still matches the preview, displays any error in the dialog, and shows the backup path after modifying an existing file. **No sessions detected** does not indicate whether an integration is installed.
 
@@ -544,6 +544,7 @@ Command hooks are short-lived and do not provide a trustworthy host PID, so Code
 | `--client-id` / `DISCORD_CLIENT_ID` | Discord application ID |
 | `--socket` / `AGENT_PRESENCE_SOCKET` | Override the local service socket; use the same path in agents and daemon |
 | `DISCORD_IPC_PATH` | Override Discord socket discovery, useful for sandboxed Discord installs |
+| `ADP_NODE` | Override the Node executable used by the desktop app and generated macOS/Linux hook launchers; use an executable path, not a shell command |
 | `--stale-minutes` | Hook inactivity timeout, 1–1440 minutes |
 | `--dry-run` | Print activity JSON instead of connecting to Discord |
 

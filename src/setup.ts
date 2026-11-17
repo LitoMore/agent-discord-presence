@@ -8,6 +8,7 @@ import {hookConfig} from './adapters/hooks.js';
 import {catalogFor, selectEvents, selectionWarnings, validateEvents, scenariosFor, scenarioSelection, validateSummaryTriggers,
   type EventSelection, type IntegrationEvent, type IntegrationScenario, type SummaryTrigger} from './integration-events.js';
 import {entryContent, policyPath, quote} from './integration-config.js';
+import {nodeCommand} from './node-runtime.js';
 import {commitIntegrationFile, integrationPath, recognizedEntry, removeHooks} from './uninstall.js';
 import type {Agent} from './protocol.js';
 
@@ -20,7 +21,7 @@ export interface SetupPlan {
 }
 export interface SetupResult {plan: SetupPlan; changed: boolean; backup?: string}
 export function hookCommand(): string {
-  return `ADP_CONFIG=${quote(resolve(settingsPath()))} AGENT_PRESENCE_SOCKET=${quote(process.platform === 'win32' ? socketPath() : resolve(socketPath()))} ${quote(process.execPath)} ${quote(fileURLToPath(new URL('./cli.js', import.meta.url)))}`;
+  return `ADP_CONFIG=${quote(resolve(settingsPath()))} AGENT_PRESENCE_SOCKET=${quote(process.platform === 'win32' ? socketPath() : resolve(socketPath()))} ${nodeCommand(fileURLToPath(new URL('./cli.js', import.meta.url)))}`;
 }
 async function inspect(agent: Agent, options: SetupOptions) {
   const catalog = catalogFor(agent);
@@ -62,14 +63,15 @@ async function inspect(agent: Agent, options: SetupOptions) {
   const kept = selected.filter(id => installed.includes(id));
   if (!manual) {
     if (kind === 'hooks') {
-      const config = JSON.parse((await removeHooks(before ?? '{}', agent, removed)).after) as ReturnType<typeof hookConfig>;
+      const command = hookCommand();
+      const config = JSON.parse((await removeHooks(before ?? '{}', agent, removed, `${command} hook ${agent}`)).after) as ReturnType<typeof hookConfig>;
       config.hooks ??= {};
-      const generated = hookConfig(agent as 'codex' | 'claude-code', hookCommand(), added);
+      const generated = hookConfig(agent as 'codex' | 'claude-code', command, added);
       for (const [id, groups] of Object.entries(generated.hooks)) config.hooks[id] = [...(config.hooks[id] ?? []), ...groups];
       after = JSON.stringify(config, null, before?.match(/\n([\t ]+)"/)?.[1] ?? 2) + '\n';
     } else if (kind === 'entry') after = entryContent(agent as 'pi' | 'opencode', selected) + '\n';
     else after = JSON.stringify({events: selected}, null, 2) + '\n';
-    if (!added.length && !removed.length && before !== undefined) after = before;
+    if (!added.length && !removed.length && before !== undefined && (kind !== 'hooks' || JSON.stringify(JSON.parse(before)) === JSON.stringify(JSON.parse(after!)))) after = before;
   }
   const warnings = selectionWarnings(agent, selected);
   if (summaryTriggers.includes('tool') && !scenariosFor(agent).some(s => s.summaryTrigger === 'tool')) warnings.push('Tool-call summaries are not supported by this adapter.');

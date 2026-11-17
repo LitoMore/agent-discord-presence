@@ -8,6 +8,7 @@ import {hookConfig, runHook} from './adapters/hooks.js';
 import {catalogFor, selectEvents, scenariosFor} from './integration-events.js';
 import {eventFlags, runManagement} from './setup-cli.js';
 import {entryContent} from './integration-config.js';
+import {nodeCommand} from './node-runtime.js';
 const help = `agent-discord-presence
 
   start                     Run the shared Discord presence service
@@ -133,8 +134,7 @@ async function main() {
     }
     if (argument === 'codex' || argument === 'claude-code') {
       if (process.platform === 'win32') throw new Error('On Windows, install the CLI on PATH and use the bundled plugin hooks');
-      const quote = (s: string) => "'" + s.replaceAll("'", "'\\''") + "'";
-      const cli = `${quote(process.execPath)} ${quote(fileURLToPath(import.meta.url))}`;
+      const cli = nodeCommand(fileURLToPath(import.meta.url));
       console.log(JSON.stringify(hookConfig(argument, cli, selectEvents(argument, eventFlags(values))), null, 2));
     } else if (argument === 'opencode' || argument === 'pi') {
       console.log(entryContent(argument, selectEvents(argument, eventFlags(values))));

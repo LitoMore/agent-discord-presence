@@ -49,21 +49,6 @@ func bridgePath() (string, error) {
 	return "", errors.New("Local service files were not found. Run npm run build from the repository root, or rebuild the desktop app.")
 }
 
-func nodePath() (string, error) {
-	if path := os.Getenv("ADP_NODE"); path != "" {
-		return path, nil
-	}
-	if path, err := exec.LookPath("node"); err == nil {
-		return path, nil
-	}
-	for _, path := range []string{"/opt/homebrew/bin/node", "/usr/local/bin/node"} {
-		if _, err := os.Stat(path); err == nil {
-			return path, nil
-		}
-	}
-	return "", errors.New("Node.js 22+ was not found. Install Node.js or set ADP_NODE to its executable path.")
-}
-
 func (d *Desktop) startWorker() error {
 	if d.worker != nil {
 		return nil
@@ -77,6 +62,8 @@ func (d *Desktop) startWorker() error {
 		return err
 	}
 	cmd := exec.Command(node, path)
+	// Preserve the launch path: Node's execPath resolves stable installer symlinks.
+	cmd.Env = append(os.Environ(), "ADP_NODE_HINT="+node)
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		return err
