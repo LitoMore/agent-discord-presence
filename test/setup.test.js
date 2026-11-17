@@ -1,3 +1,4 @@
+import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, readFile, writeFile, readdir, rm, symlink, stat} from 'node:fs/promises';
@@ -20,7 +21,8 @@ import {request} from '../dist/client.js';
 const exec = promisify(execFile);
 async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), 'adp-setup-'));
-  t.after(() => rm(dir, {recursive: true, force: true}));
+  const previousConfig=process.env.ADP_CONFIG;process.env.ADP_CONFIG=join(dir,'config.json');
+  t.after(async()=>{if(previousConfig===undefined)delete process.env.ADP_CONFIG;else process.env.ADP_CONFIG=previousConfig;await rm(dir,{recursive:true,force:true});});
   return {dir, path: join(dir, 'integration.json')};
 }
 async function until(fn) { for (let i = 0; i < 200; i++) { if (fn()) return; await delay(10); } assert.fail('Timed out'); }
@@ -43,7 +45,7 @@ test('agent catalogs validate profiles, required callbacks, pairs, unsupported A
 });
 
 for (const agent of ['codex', 'claude-code']) {
-  test(`${agent} setup reconciles selected hooks and partial removal preserves all other events and settings`, async t => {
+  test(`${agent} setup reconciles selected hooks and partial removal preserves all other events and settings`, {skip:process.platform==='win32'}, async t => {
     const {path, dir} = await fixture(t);
     const unrelated = {type: 'command', command: 'echo unrelated'};
     const original = {model: 'keep', hooks: {Stop: [{matcher: 'keep', hooks: [unrelated]}]}};
@@ -82,7 +84,7 @@ for (const agent of ['codex', 'claude-code']) {
   });
 }
 
-test('new setup creates directories, rejects links and custom code, and never applies a stale preview', async t => {
+test('new setup creates directories, rejects links and custom code, and never applies a stale preview', {skip:process.platform==='win32'}, async t => {
   const {path, dir} = await fixture(t);
   const nested = join(dir, 'new', 'plugins', 'entry.ts');
   const plan = await planSetup('pi', {path: nested, profile: 'lightweight'});
@@ -124,7 +126,7 @@ for (const agent of ['pi', 'opencode']) {
   });
 }
 
-test('desktop selected setup and removal round-trip with revision checks and selected-only generated prompts', async t => {
+test('desktop selected setup and removal round-trip with revision checks and selected-only generated prompts', {skip:process.platform==='win32'}, async t => {
   const {path} = await fixture(t);
   const response = await handleDesktopRequest({action: 'integration', agent: 'codex', path, events: ['Stop', 'SessionEnd'], language: 'zh-CN'});
   assert.equal(response.ok, true);
@@ -142,7 +144,7 @@ test('desktop selected setup and removal round-trip with revision checks and sel
   assert.throws(() => integrationInstructions('pi', 'en', {events: ['Stop']}), /Unsupported/);
 });
 
-test('CLI scripts select profiles or exact events and non-TTY invocations never wait for answers', async t => {
+test('CLI scripts select profiles or exact events and non-TTY invocations never wait for answers', {skip:process.platform==='win32'}, async t => {
   const {path, dir} = await fixture(t);
   const run = (...args) => exec(process.execPath, ['dist/cli.js', ...args], {env: {...process.env, ADP_CONFIG: join(dir, 'config.json')}});
   assert.match((await run('events', 'pi')).stdout, /agent_settled.*required/);
@@ -164,7 +166,7 @@ test('CLI scripts select profiles or exact events and non-TTY invocations never 
 test('lightweight adapters omit optional behavior but preserve reporter lifecycle and cleanup', async t => {
   const {dir} = await fixture(t);
   const previous = process.env.AGENT_PRESENCE_SOCKET;
-  process.env.AGENT_PRESENCE_SOCKET = join(dir, 'service.sock');
+  process.env.AGENT_PRESENCE_SOCKET = ipcPath(dir, 'service.sock');
   const daemon = await startDaemon({path: process.env.AGENT_PRESENCE_SOCKET, dryRun: true, log() {}});
   t.after(async () => { await daemon.close(); if (previous === undefined) delete process.env.AGENT_PRESENCE_SOCKET; else process.env.AGENT_PRESENCE_SOCKET = previous; });
   const handlers = new Map();
@@ -199,7 +201,7 @@ test('Harness stores event policy separately, filters nested events, and always 
   assert.equal(adapterEvents('deepseek-harness').has('approval/asked'), false);
   const callbacks = new Map(); let cleanup;
   const previousSocket = process.env.AGENT_PRESENCE_SOCKET;
-  process.env.AGENT_PRESENCE_SOCKET = join(dir, 'harness.sock');
+  process.env.AGENT_PRESENCE_SOCKET = ipcPath(dir, 'harness.sock');
   let generated = 0;
   const daemon = await startDaemon({path: process.env.AGENT_PRESENCE_SOCKET, dryRun: true, log() {}, generate: async () => { generated++; return {topic: 'must not generate', subtitle: ''}; }});
   t.after(async () => { await daemon.close(); if (previousSocket === undefined) delete process.env.AGENT_PRESENCE_SOCKET; else process.env.AGENT_PRESENCE_SOCKET = previousSocket; });

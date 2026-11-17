@@ -7,15 +7,17 @@ import {loadSettings, saveSettings, resolveSettings, mergeSettings, settingsPath
 import {hookConfig} from './adapters/hooks.js';
 import type {DesktopRequest, DesktopResponse, DesktopSnapshot, IntegrationInstructions, ServiceStatus, SettingsScope} from './desktop-protocol.js';
 import {integrationPath, planUninstall, uninstallIntegration} from './uninstall.js';
-import {applySetup, hookCommand, planSetup, type SetupOptions} from './setup.js';
+import {applySetup, hookCommand, managementCommand, planSetup, type SetupOptions} from './setup.js';
 import {selectEvents, scenarioSelection, validateSummaryTriggers} from './integration-events.js';
 import {entryContent} from './integration-config.js';
+import {listAgents, listPlugins, installPlugin, changePlugin, getPlugin, pluginSetup, pluginPolicy} from './agent-plugins.js';
+import {startPluginInstall, cancelPluginInstall, pluginInstallState} from './plugin-install.js';
 
 const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
-const quote = (s: string) => "'" + s.replaceAll("'", "'\\''") + "'";
+const quote = (s: string) => "'" + s.replaceAll("'", process.platform === 'win32' ? "''" : "'\\''") + "'";
 function scopeAgent(scope: SettingsScope): Agent | undefined {
   if (scope === 'global') return;
-  if (!agents.includes(scope)) throw new Error('Unknown settings scope');
+  if (!listAgents().some(a => a.id === scope)) throw new Error('Unknown settings scope');
   return scope;
 }
 export async function desktopSnapshot(): Promise<DesktopSnapshot> {
@@ -28,8 +30,10 @@ export async function desktopSnapshot(): Promise<DesktopSnapshot> {
   let configuration: Configuration = {};
   let configurationError: string | null = null;
   try { configuration = loadSettings(); } catch (error) { configurationError = (error as Error).message; }
-  return {status, serviceError, configurationError, configuration, effective: resolveSettings(configuration),
-    agentSettings: Object.fromEntries(agents.map(agent => [agent, resolveSettings(configuration, agent)])) as DesktopSnapshot['agentSettings'],
+  let descriptors = listAgents(), plugins: DesktopSnapshot['plugins'] = [], pluginError: string | null = null;
+  try {plugins = listPlugins();} catch {pluginError = 'Plugin catalog is invalid. Restore plugins.json to manage plugins.';}
+  return {status, serviceError, configurationError, configuration, agents: descriptors, plugins, pluginError, pluginInstall: pluginInstallState(), effective: resolveSettings(configuration),
+    agentSettings: Object.fromEntries(descriptors.map(agent => [agent.id, resolveSettings(configuration, agent.id)])) as DesktopSnapshot['agentSettings'],
     configPath: settingsPath(), socketPath: socketPath(), version: '0.0.3'};
 }
 function adapterInstructions(agent: Agent, chinese: boolean, options: SetupOptions): Omit<IntegrationInstructions, 'prompt'> {
@@ -48,13 +52,32 @@ function adapterInstructions(agent: Agent, chinese: boolean, options: SetupOptio
       instructions: chinese ? '将此内容保存到插件文件，然后重新加载扩展或重启智能体。' : 'Save this content to the plugin file, then reload extensions or restart your agent.'};
   }
   const root = fileURLToPath(new URL('../', import.meta.url));
-  return {agent, path: '', content: `${hookCommand()} setup deepseek-harness --events ${quote(selectEvents(agent, options).join(','))}\ndsh plugin --profile web add ${quote(root)}`,
+  return {agent, path: '', content: `${managementCommand()} setup deepseek-harness --events ${quote(selectEvents(agent, options).join(','))}\ndsh plugin --profile web add ${quote(root)}`,
     instructions: chinese ? '在终端中运行此命令，将 web 替换为你的 Harness 配置名称，然后重启 Harness。' : 'Run this command in your terminal, replacing web with your Harness profile, then restart Harness.'};
 }
 export function integrationInstructions(agent: Agent, language: 'en' | 'zh-CN' = 'en', options: SetupOptions = {}): IntegrationInstructions {
   const chinese = language === 'zh-CN';
+  if (getPlugin(agent)) {
+    const plugin = getPlugin(agent)!;
+    if (!plugin.enabled) throw new Error('Agent plugin is disabled');
+    const setup = pluginSetup(agent, language)!;
+    if (pluginPolicy(agent)) {
+      if (options.scenarios !== undefined) options = {...options, ...scenarioSelection(agent, options.scenarios), scenarios: undefined};
+      const events = selectEvents(agent, options);
+      const triggers = options.summaryTriggers === undefined ? '' : ` --summary-triggers=${quote(validateSummaryTriggers(options.summaryTriggers).join(','))}`;
+      const command = managementCommand();
+      const content = `${command} setup ${agent} --events ${quote(events.join(','))}${triggers}\n${setup.content}`;
+      return {agent, path: '', content, instructions: setup.instructions, prompt: (chinese
+        ? `请为 ${plugin.name} 配置 Presence 集成。保留现有配置，先预览再应用下列事件策略，然后安装或重新加载 Agent 端插件。\n`
+        : `Configure Presence for ${plugin.name}. Preserve existing configuration, preview and apply this event policy, then install or reload the Agent-side plugin.\n`) + content};
+    }
+    return {agent, ...setup, prompt: (chinese
+      ? `请为 ${plugin.name} 配置 Presence 集成。先检查现有配置，备份更改并保留其他集成。\n`
+      : `Configure Presence for ${plugin.name}. Inspect and back up existing configuration and preserve other integrations.\n`) + setup.instructions + '\n' + setup.content};
+  }
+  if (!listAgents().some(a => a.id === agent && a.enabled)) throw new Error('Unknown or disabled agent');
   if (options.scenarios !== undefined) options = {...options, ...scenarioSelection(agent, options.scenarios), scenarios: undefined};
-  const summaryCommand = options.summaryTriggers === undefined ? undefined : `${hookCommand()} config set summaryTriggers ${quote(JSON.stringify(validateSummaryTriggers(options.summaryTriggers)))} --agent ${agent}`;
+  const summaryCommand = options.summaryTriggers === undefined ? undefined : `${managementCommand()} config set summaryTriggers ${quote(JSON.stringify(validateSummaryTriggers(options.summaryTriggers)))} --agent ${agent}`;
   const setup = adapterInstructions(agent, chinese, options);
   const root = fileURLToPath(new URL('../', import.meta.url));
   const prompt = (chinese ? [
@@ -121,7 +144,21 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected desktop request');
     const message = value as DesktopRequest;
+    if (message.action === 'plugin-install-start') {
+      startPluginInstall(message.source); return {ok: true, snapshot: await desktopSnapshot()};
+    }
+    if (message.action === 'plugin-install-cancel') {
+      cancelPluginInstall(message.id); return {ok: true, snapshot: await desktopSnapshot()};
+    }
+    if (message.action === 'plugin-install') {
+      await installPlugin(message.path); return {ok: true, snapshot: await desktopSnapshot()};
+    }
+    if (message.action === 'plugin-enable' || message.action === 'plugin-disable' || message.action === 'plugin-remove') {
+      await changePlugin(message.agent, message.action.slice(7) as 'enable' | 'disable' | 'remove');
+      return {ok: true, snapshot: await desktopSnapshot()};
+    }
     if (message.action === 'integration') {
+      if (getPlugin(message.agent) && !pluginPolicy(message.agent)) return {ok: true, integration: integrationInstructions(message.agent, message.language)};
       const setupPlan = await planSetup(message.agent, message);
       return {ok: true, setupPlan, integration: integrationInstructions(message.agent, message.language, {events: setupPlan.selectedEvents, summaryTriggers: setupPlan.summaryTriggers, path: setupPlan.kind === 'policy' ? undefined : setupPlan.path})};
     }

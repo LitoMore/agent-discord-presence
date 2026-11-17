@@ -3,13 +3,21 @@ import {dirname, resolve} from 'node:path';
 import {catalogFor, selectEvents, validateEvents, type EventSelection} from './integration-events.js';
 import type {Agent} from './protocol.js';
 import {settingsPath} from './settings.js';
+import {pluginPolicy, validAgentID} from './agent-plugins.js';
 
 export const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
-export function policyPath(): string { return resolve(dirname(settingsPath()), 'integrations', 'deepseek-harness.json'); }
+export function policyManaged(agent: Agent): boolean { return agent === 'deepseek-harness' || !!pluginPolicy(agent); }
+export function policyPath(agent: Agent = 'deepseek-harness'): string {
+  if (!validAgentID(agent)) throw new Error('Invalid Agent ID');
+  return resolve(dirname(settingsPath()), 'integrations', `${agent}.json`);
+}
+export function policyContent(events: string[], before?: string): string {
+  return JSON.stringify({...JSON.parse(before ?? '{}'), events}, null, 2) + '\n';
+}
 export function adapterEvents(agent: Agent, options?: EventSelection): Set<string> {
   if (options) return new Set(selectEvents(agent, options));
-  if (agent === 'deepseek-harness') {
-    try { return new Set(validateEvents(agent, JSON.parse(readFileSync(policyPath(), 'utf8')).events)); }
+  if (policyManaged(agent)) {
+    try { return new Set(validateEvents(agent, JSON.parse(readFileSync(policyPath(agent), 'utf8')).events)); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return new Set(catalogFor(agent).filter(e => e.required).map(e => e.id));
     }

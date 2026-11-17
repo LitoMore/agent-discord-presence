@@ -1,3 +1,4 @@
+import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, readFile, writeFile, rm} from 'node:fs/promises';
@@ -24,7 +25,8 @@ test('agent overrides stay sparse, inherit nested defaults, and validate indepen
   assert.equal(resolveSettings(config, 'pi').model, 'shared');
   assert.equal(resolveSettings(config, 'pi').enabled, true);
   assert.deepEqual(config.agents.codex, {model: '', presence: {assets: {large_image: 'codex'}, buttons: []}});
-  for (const agents of [{unknown: {}}, {codex: null}, {codex: {enabled: 'false'}}, {codex: {agents: {}}}, {codex: {secret: 'x'}}, {codex: {presence: {assets: {invalid: true}}}}]) {
+  assert.deepEqual(validateSettings({agents: {'uninstalled-agent': {model: 'kept'}}}).agents['uninstalled-agent'], {model: 'kept'});
+  for (const agents of [{'invalid/id': {}}, {codex: null}, {codex: {enabled: 'false'}}, {codex: {agents: {}}}, {codex: {secret: 'x'}}, {codex: {presence: {assets: {invalid: true}}}}]) {
     assert.throws(() => validateSettings({agents}));
   }
 });
@@ -62,7 +64,7 @@ test('simultaneous Codex and Harness sessions select their own model, service, p
     'deepseek-harness': {enabled: true, service: 'session', customPrompt: 'Harness 中文', presence: {name: 'Harness card', assets: {large_image: 'deepseek'}}},
   }};
   await writeFile(process.env.ADP_CONFIG, JSON.stringify(config));
-  const path = join(dir, 'service.sock');
+  const path = ipcPath(dir, 'service.sock');
   const daemon = await startDaemon({path, transport: {status: 'test', start() {}, stop() {}, setActivity() {}}});
   t.after(async () => {
     await daemon.close(); await new Promise(resolve => http.close(resolve));

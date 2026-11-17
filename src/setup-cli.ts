@@ -4,6 +4,7 @@ import {agents, labels, type Agent} from './protocol.js';
 import {catalogFor, relatedEvents, selectEvents, scenariosFor, validateSummaryTriggers} from './integration-events.js';
 import {applySetup, planSetup, type SetupOptions} from './setup.js';
 import {planUninstall, uninstallIntegration} from './uninstall.js';
+import {listPlugins} from './agent-plugins.js';
 
 export interface ManageFlags {path?: string; profile?: string; events?: string; scenarios?: string; 'summary-triggers'?: string; 'dry-run'?: boolean; interactive?: boolean}
 export function eventFlags(flags: ManageFlags): SetupOptions {
@@ -22,9 +23,10 @@ export async function runManagement(command: 'setup' | 'uninstall', argument: st
       if (!stdin.isTTY || !stdout.isTTY) throw new Error('Interactive setup requires a terminal. Specify an agent with --profile or --events; use --dry-run to preview.');
       terminal = createInterface({input: stdin, output: stdout});
       if (!argument) {
-        agents.forEach((id, index) => console.log(`${index + 1}. ${labels[id]}`));
+        const available = [...new Set([...agents, ...listPlugins().filter(p => p.installed && p.managedIntegration).map(p => p.id)])];
+        available.forEach((id, index) => console.log(`${index + 1}. ${labels[id]}`));
         const answer = (await terminal.question('Choose agent: ')).trim();
-        agent = agents[Number(answer) - 1] ?? answer as Agent;
+        agent = available[Number(answer) - 1] ?? answer as Agent;
       }
     }
     catalogFor(agent);

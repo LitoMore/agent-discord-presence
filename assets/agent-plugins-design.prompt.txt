@@ -1,0 +1,203 @@
+Agent Discord Presence — external Agent plugin design prompt
+===========================================================
+
+Purpose: document the external-plugin design and provide a reusable coding prompt.
+Scope: generic ADP plugin support, the Agents page, and Windows compatibility.
+Implementation: https://github.com/LitoMore/agent-discord-presence/pull/4
+External packages: https://github.com/weiuou/adp-plugins
+
+AI model disclosure
+-------------------
+
+Model: GPT-6.1-Sol
+Reasoning effort: high
+Source: the user's explicit statement about the model used for this work.
+
+Provenance
+----------
+
+This document was consolidated after implementation from the user's requests
+and the resulting design. The selected requests below are verbatim excerpts.
+The development prompt is a retrospective synthesis, not a verbatim record of
+one original prompt or a complete conversation transcript. The model disclosure
+above is user-reported; this document does not establish that every requirement
+was met by one model run.
+
+When discussing AI assistance, distinguish this reusable design brief from the
+actual user-message export. Attribute the model and reasoning effort above to
+the user's disclosure rather than presenting them as independently audited
+session metadata.
+
+References
+----------
+
+- Existing README cover prompt, used as the documentation format reference:
+  assets/readme-cover.prompt.txt
+- Manifest validation, local registry and managed package copies:
+  src/agent-plugins.ts
+- Public adapter SDK and bounded summary-worker execution:
+  src/plugin-sdk.ts and src/plugin-worker.ts
+- Desktop protocol, installation guidance and shared setup/removal logic:
+  src/desktop.ts, src/desktop-protocol.ts, src/setup.ts and src/uninstall.ts
+- Native Agents list, source badges, plugin actions and scoped translations:
+  apps/desktop/plugins.go, apps/desktop/view.go and apps/desktop/locale.go
+- Package authoring contract: external-plugins/README.md
+
+Selected original user requests
+------------------------------
+
+1. "嗯对，当时我想做一个插件化的agent管理功能，你看看按现在的上游情况我需要改变哪里不？就直接在agents那页加就行了，不用增加额外的插件页了"
+2. "这个为什么插件的这些，行高会比内置的高？"
+3. "那不要bundled，改成那种外部的我看看，不随应用附带任何插件"
+4. "这个有问题吧？为什么关于插件的要写在core代码中？"
+5. "把pi相关的恢复成原样"
+6. "行，看起来行为没啥问题，就是我希望区分哪些是插件哪些是bundle的"
+7. "为什么在windows上会有一个node.exe的cmd？能不能隐藏？做一下适配"
+8. "需要有这么多的测试吗？"
+
+These requests evolved during implementation. The initial exploration of
+externalizing integrations was followed by restoring Pi to its upstream behavior.
+The final design preserves existing built-in integrations and adds explicitly
+installed external packages. The excerpts are evidence of that progression,
+not a set of contradictory requirements to apply simultaneously.
+
+Design history
+--------------
+
+1. Review current upstream before adapting the previous plugin prototype.
+2. Put installation and plugin actions in the existing Agents page. Reuse its
+   rows and settings scopes, with consistent spacing and inline source badges.
+3. Preserve the upstream built-in integrations, including Pi. Distribute
+   additional Agent packages independently and require explicit installation.
+4. Generalize metadata, session labels, settings scopes and event policies so
+   an external Agent can participate without a new hardcoded desktop entry.
+5. Move host-specific descriptions, translations and installer commands into
+   packages. Keep core UI messages and lifecycle handling generic.
+6. Keep package removal distinct from removing the host-side integration.
+   Extend preview, dependency validation and partial removal to policy packages.
+7. Separate host-specific implementations into the external plugin repository.
+8. Hide background process windows on Windows. When synchronizing upstream's
+   Node discovery changes, preserve that behavior and distinguish POSIX hook
+   launchers from PowerShell commands copied from desktop setup dialogs.
+
+Consolidated development prompt
+------------------------------
+
+Task: add external Agent plugin support to Agent Discord Presence while
+preserving the current upstream built-in integrations and setup behavior.
+
+Start from the current upstream implementation. Inspect the existing session
+protocol, settings inheritance, summary scheduling and native desktop views.
+Build on their actual contracts rather than introducing a parallel subsystem.
+
+User experience
+
+- Keep management on the existing Agents page. Add a local-package installer
+  and row actions for enabling, disabling and removing installed packages.
+- Use the same row structure, normal-state height, setup controls and settings
+  selection for built-in and external Agents.
+- Show an inline source badge: "Bundled" / "Plugin" in English and "内置" /
+  "插件" in Chinese. Keep the status line available for session/disabled/error
+  state rather than replacing it with the source label.
+- Preserve the upstream Codex, Claude Code, OpenCode, Pi and DeepSeek Harness
+  integrations. Additional packages are optional and distributed separately.
+- Present only operations the package supports. Explain manual host steps
+  accurately; saving an ADP policy alone is not proof of host installation.
+
+Core and package responsibilities
+
+- Core owns package validation/registration, session transport, settings,
+  activity selection, summary scheduling and generic management UI.
+- Packages own their IDs, names, icons, host adapters, installation/removal
+  instructions, optional event catalogs and host-specific translations.
+- Register external Agents from validated manifests. New host support should
+  not require a new Go row, a core translation entry or an ID-specific branch.
+- Expose a versioned manifest and a shared SDK. Adapters reuse the existing
+  protocol and presence pipeline; avoid a separate Discord connection per host.
+- Supply the SDK/config/socket binding to the managed copy. Keep machine-local
+  bindings and settings out of source packages and public repositories.
+- Keep the API generic. Obtain host events and payload shapes from the actual
+  host interface and document version-specific limits instead of inventing APIs.
+
+Installation and lifecycle
+
+- Installation validates adp-plugin.json and copies the package to an owned,
+  stable directory beside ADP configuration. The source folder may then move.
+- Bound package, manifest and icon sizes. Keep referenced files inside the
+  package, reject symbolic links and reserve built-in IDs/display identities.
+- Manifest discovery validates data without executing plugin entry points.
+  Plugins still execute with the user's local permissions; validation is not
+  an execution sandbox.
+- Accept events only from built-in integrations or installed, enabled packages.
+  Disabling/removing a package clears its sessions and pin, and cancels pending
+  work so stale summaries cannot restore removed activity.
+- Preserve saved per-agent settings after removal. Package removal retains
+  host-side files; full host uninstallation follows the package's instructions.
+
+Configuration and localization
+
+- Reuse global settings and per-agent overrides. Keep saved scopes independent
+  of whether their package is currently installed.
+- Let packages opt into managed event policies with required events and declared
+  dependencies. Preserve lifecycle/cleanup callbacks during partial removal.
+- Retain preview revisions, stale-preview detection, backups and unrelated
+  configuration fields. Host adapters must honor the selected policy.
+- Resolve package-owned text through that Agent's locale catalog, with source
+  text as fallback. Keep core labels in the core catalog and isolate plugin
+  translations so they cannot replace application labels or another Agent's text.
+- Preserve protocol identifiers, generated commands, user text and published
+  activity independently of UI language.
+
+Summaries and host behavior
+
+- Support optional external summary workers through the shared SDK, with bounded
+  input/output, timeout, cancellation and child-process cleanup.
+- Prevent auxiliary model calls from reporting themselves as user activity.
+  Preserve existing freshness checks after new work, manual edits or session end.
+- Forward only the metadata and completed text the integration actually needs.
+  Exclude reasoning, credentials, tool arguments/output and workspace paths from
+  activity reporting. Keep failures isolated from the user's host session.
+- Describe reduced capabilities when a host exposes only command hooks. A lack
+  of response text or close/interrupt events must remain an explicit limitation.
+
+Windows and upstream compatibility
+
+- Keep the native UI visible while bridge, service and summary workers execute
+  without visible console windows. Preserve working stdin/stdout communication.
+- Retain upstream Node discovery, explicit ADP_NODE handling and stable launcher
+  hints. Combine these with hidden-process flags during conflict resolution.
+- Keep POSIX hook-file generation separate from terminal management commands.
+  Use correctly quoted PowerShell commands for Windows configuration dialogs,
+  including config, socket, Node executable and package paths.
+- Check paths containing spaces and apostrophes, and exercise the Pi, OpenCode,
+  Harness and generic external-plugin setup paths after upstream synchronization.
+
+Validation and delivery
+
+- Use focused behavior checks for package lifecycle, configuration preservation,
+  event dependencies, translation isolation, stale work and process cancellation.
+- Preserve existing coverage and consolidate overlapping tests. Small reversible
+  visual changes should use existing view checks or visual inspection rather
+  than generating a large new test suite.
+- On Windows, verify actual command execution, Node discovery, hidden console
+  behavior, native desktop checks and the packaged backend. State which checks
+  were skipped because they require another platform or a real host session.
+- Keep generic core changes and host-specific packages in their respective
+  repositories. Document installation and compatibility without shipping local
+  runtime bindings, credentials or development-machine paths.
+- Explain the delivered behavior, validation evidence and material limitations.
+
+Template for subsequent changes
+-------------------------------
+
+Current implementation/ref: [commit, PR or branch]
+Target repository: [ADP core or external plugin collection]
+Requested change: [specific behavior or design improvement]
+Affected host/interface version, if applicable: [verified source or version]
+
+Preserve the existing Agents-page structure, built-in integration behavior,
+per-agent settings, package/core boundary and Windows process handling.
+Inspect the affected contracts, make the smallest coherent change, and validate
+observable behavior. Record any host capability limits and upstream conflicts.
+Update the relevant package instructions and this design history if the design
+changes. Keep reconstructed design prompts distinct from verbatim user inputs.

@@ -7,10 +7,11 @@ import {settingsPath, loadSettings, resolveSettings, saveSetting} from './settin
 import {hookConfig} from './adapters/hooks.js';
 import {catalogFor, selectEvents, selectionWarnings, validateEvents, scenariosFor, scenarioSelection, validateSummaryTriggers,
   type EventSelection, type IntegrationEvent, type IntegrationScenario, type SummaryTrigger} from './integration-events.js';
-import {entryContent, policyPath, quote} from './integration-config.js';
-import {nodeCommand} from './node-runtime.js';
+import {entryContent, policyPath, policyManaged, policyContent, quote} from './integration-config.js';
+import {nodeCommand, nodeExecutable} from './node-runtime.js';
 import {commitIntegrationFile, integrationPath, recognizedEntry, removeHooks} from './uninstall.js';
 import type {Agent} from './protocol.js';
+import {getPlugin} from './agent-plugins.js';
 
 export interface SetupOptions extends EventSelection {path?: string; scenarios?: string[]; summaryTriggers?: SummaryTrigger[]}
 export interface SetupPlan {
@@ -23,7 +24,14 @@ export interface SetupResult {plan: SetupPlan; changed: boolean; backup?: string
 export function hookCommand(): string {
   return `ADP_CONFIG=${quote(resolve(settingsPath()))} AGENT_PRESENCE_SOCKET=${quote(process.platform === 'win32' ? socketPath() : resolve(socketPath()))} ${nodeCommand(fileURLToPath(new URL('./cli.js', import.meta.url)))}`;
 }
+/** Commands copied into the user's terminal; hook scripts remain POSIX-only. */
+export function managementCommand(): string {
+  if (process.platform !== 'win32') return hookCommand();
+  const psQuote = (value: string) => "'" + value.replaceAll("'", "''") + "'";
+  return `$env:ADP_CONFIG = ${psQuote(resolve(settingsPath()))}; $env:AGENT_PRESENCE_SOCKET = ${psQuote(socketPath())}; & ${psQuote(nodeExecutable())} ${psQuote(fileURLToPath(new URL('./cli.js', import.meta.url)))}`;
+}
 async function inspect(agent: Agent, options: SetupOptions) {
+  if (getPlugin(agent) && !getPlugin(agent)!.enabled) throw new Error('Enable the Agent plugin before configuring it');
   const catalog = catalogFor(agent);
   if (options.scenarios !== undefined && (options.events !== undefined || options.profile !== undefined || options.summaryTriggers !== undefined)) throw new Error('Use scenarios or a custom event selection');
   const configuration = loadSettings();
@@ -32,9 +40,9 @@ async function inspect(agent: Agent, options: SetupOptions) {
   const summaryTriggers = validateSummaryTriggers(scenario?.summaryTriggers ?? options.summaryTriggers ?? effective.summaryTriggers);
   const settingsChanged = JSON.stringify(summaryTriggers) !== JSON.stringify(effective.summaryTriggers);
   if (options.path !== undefined && (typeof options.path !== 'string' || !options.path.trim() || options.path.includes('\0'))) throw new Error('Invalid integration path');
-  const path = resolve(options.path ?? (agent === 'deepseek-harness' ? policyPath() : integrationPath(agent)));
-  if (agent === 'deepseek-harness' && options.path !== undefined && path !== policyPath()) throw new Error('Harness options use the Presence policy file; choose the installation profile in Harness.');
-  const kind = agent === 'codex' || agent === 'claude-code' ? 'hooks' : agent === 'deepseek-harness' ? 'policy' : 'entry';
+  const path = resolve(options.path ?? (policyManaged(agent) ? policyPath(agent) : integrationPath(agent)));
+  if (policyManaged(agent) && options.path !== undefined && path !== policyPath(agent)) throw new Error('Agent options use the Presence policy file; choose the installation profile in the Agent.');
+  const kind = agent === 'codex' || agent === 'claude-code' ? 'hooks' : policyManaged(agent) ? 'policy' : 'entry';
   if (kind === 'hooks' && process.platform === 'win32') throw new Error('On Windows, use the bundled PATH-based hooks and configure events manually.');
   let before: string | undefined, after: string | undefined, mode = 0o600, manual = false;
   let installed: string[] = [];
@@ -70,7 +78,7 @@ async function inspect(agent: Agent, options: SetupOptions) {
       for (const [id, groups] of Object.entries(generated.hooks)) config.hooks[id] = [...(config.hooks[id] ?? []), ...groups];
       after = JSON.stringify(config, null, before?.match(/\n([\t ]+)"/)?.[1] ?? 2) + '\n';
     } else if (kind === 'entry') after = entryContent(agent as 'pi' | 'opencode', selected) + '\n';
-    else after = JSON.stringify({events: selected}, null, 2) + '\n';
+    else after = policyContent(selected, before);
     if (!added.length && !removed.length && before !== undefined && (kind !== 'hooks' || JSON.stringify(JSON.parse(before)) === JSON.stringify(JSON.parse(after!)))) after = before;
   }
   const warnings = selectionWarnings(agent, selected);
@@ -84,7 +92,7 @@ async function inspect(agent: Agent, options: SetupOptions) {
     selectedEvents: selected, installedEvents: installed, added, removed, kept, catalog, warnings, revision: '',
     scenarios: scenariosFor(agent), summaryTriggers,
     note: manual ? 'The existing integration contains unsupported content. Review it manually before applying changes.'
-      : kind === 'policy' ? 'Harness options are saved separately. Install the plugin through Harness, then reload it to apply these options.'
+      : kind === 'policy' ? agent === 'deepseek-harness' ? 'Harness options are saved separately. Install the plugin through Harness, then reload it to apply these options.' : 'Agent options are saved separately. Install or reload the Agent plugin to apply these options.'
       : 'Review the selected events. Other hooks and settings will be preserved.'};
   plan.revision = createHash('sha256').update(JSON.stringify([plan, before, after, mode, configuration])).digest('hex');
   return {plan, before, after, mode, settingsChanged};

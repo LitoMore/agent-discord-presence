@@ -79,6 +79,14 @@ See the [usage guide](USAGE.md) for installation, configuration, and operation:
 - [Session selection and lifecycle](USAGE.md#session-selection-and-lifecycle)
 - [Configuration and platform notes](USAGE.md#configuration-and-platform-notes)
 
+## External Agent plugins
+
+Use **Agents → Install local plugin…** in the desktop app to add optional Agent
+packages distributed separately from the app. Core agents, including Pi, retain
+their built-in upstream integrations. No external Agent plugin is installed by default.
+Their metadata, icons and settings scopes come from the installed package.
+See [the external plugin guide](external-plugins/README.md).
+
 ## License
 
 MIT

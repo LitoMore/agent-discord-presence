@@ -49,7 +49,7 @@ func toggleEvent(catalog []integrationEvent, selected map[string]bool, id string
 		}
 	}
 }
-func (a *nativeApp) eventChoices(c *ui.Context, catalog []integrationEvent, selected map[string]bool, removing bool, changed func()) {
+func (a *nativeApp) eventChoices(c *ui.Context, agent string, catalog []integrationEvent, selected map[string]bool, removing bool, changed func()) {
 	groups := []struct{ id, label string }{
 		{"presence", "Work status"}, {"tools", "Tool activity"}, {"waiting", "Waiting status"},
 		{"errors", "Error status"}, {"summary", "Reply collection"}, {"cleanup", "Session cleanup"}, {"", "Other events"},
@@ -96,7 +96,7 @@ func (a *nativeApp) eventChoices(c *ui.Context, catalog []integrationEvent, sele
 						}
 						row.Children(func() {
 							ui.Row(c).Gap(10).Children(func() {
-								if ui.Checkbox(c, &value, event.ID).FontSize(12).FontWeight(500).Grow(1).Disabled(a.busy || event.Required).Tooltip(a.t(event.Description)).Changed() {
+								if ui.Checkbox(c, &value, event.ID).FontSize(12).FontWeight(500).Grow(1).Disabled(a.busy || event.Required).Tooltip(a.agentText(agent, event.Description)).Changed() {
 									toggleEvent(catalog, selected, event.ID, value, removing)
 									changed()
 								}
@@ -105,7 +105,7 @@ func (a *nativeApp) eventChoices(c *ui.Context, catalog []integrationEvent, sele
 								}
 							})
 							ui.Column(c).Padding(0, 0, 0, 24).Gap(3).Children(func() {
-								muted(c, a.t(event.Description))
+								muted(c, a.agentText(agent, event.Description))
 								if event.Source != "" {
 									muted(c, a.t("Via %s", event.Source)).FontSize(10)
 								}
@@ -222,13 +222,16 @@ func (a *nativeApp) managedSetupDialog(c *ui.Context) {
 	}
 	ui.Modal(c, &a.setupOpen, func() {
 		ui.Column(c).Width(640).MaxWidthPercent(100).Gap(18).Children(func() {
-			ui.Text(c, a.t("Set up %s", agentLabels[p.Agent])).FontSize(19).FontWeight(600)
+			ui.Text(c, a.t("Set up %s", a.agentLabel(p.Agent))).FontSize(19).FontWeight(600)
 			ui.Segmented(c, &a.setupMode, a.t("Agent prompt"), a.t("Manual configuration"), a.t("Direct configuration")).FillEqually().Label(a.t("Setup method"))
 			if a.setupMode == 2 {
 				ui.Checkbox(c, &a.setupAdvanced, a.t("Advanced: individual events")).FontSize(12)
 			}
 			ui.Scroll(c).Scrollbars(false).Height(bodyHeight).Children(func() {
 				ui.Column(c).Gap(20).Children(func() {
+					if p.Kind == "policy" && p.Agent != "deepseek-harness" && a.setupMode == 2 {
+						muted(c, a.t("After saving these options, install or reload the Agent-side plugin using the instructions in Manual configuration."))
+					}
 					if a.setupMode == 2 {
 						if !a.setupAdvanced {
 							a.scenarioChoices(c)
@@ -274,7 +277,7 @@ func (a *nativeApp) managedSetupDialog(c *ui.Context) {
 									muted(c, a.t(label, len(p.InstalledEvents))).Shrink(0)
 								})
 							})
-							a.eventChoices(c, p.Catalog, a.setupSelected, false, a.setupChanged)
+							a.eventChoices(c, p.Agent, p.Catalog, a.setupSelected, false, a.setupChanged)
 						}
 						if a.setupDirty {
 							muted(c, a.t("Preview the updated selection before applying or copying it."))

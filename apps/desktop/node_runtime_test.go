@@ -25,7 +25,7 @@ func TestNodeCandidates(t *testing.T) {
 	} {
 		paths := nodeCandidates(test.goos, getenv, "/users/test")
 		for _, path := range test.want {
-			if !slices.Contains(paths, filepath.FromSlash(path)) {
+			if !slices.ContainsFunc(paths, func(candidate string) bool { return filepath.FromSlash(candidate) == filepath.FromSlash(path) }) {
 				t.Errorf("%s: missing %s in %v", test.goos, path, paths)
 			}
 		}

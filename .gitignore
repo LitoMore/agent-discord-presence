@@ -4,3 +4,4 @@ dist/
 .DS_Store
 apps/desktop/build/
 apps/desktop/.mygo/
+apps/desktop/mygo_*.syso

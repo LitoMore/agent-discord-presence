@@ -1,5 +1,6 @@
-export const agents = ['codex', 'claude-code', 'opencode', 'pi', 'deepseek-harness'] as const;
-export type Agent = typeof agents[number];
+import {agentEnabled, agentName} from './agent-plugins.js';
+export const agents: readonly string[] = ['codex', 'claude-code', 'opencode', 'pi', 'deepseek-harness'];
+export type Agent = string;
 export type State = 'idle' | 'working' | 'waiting' | 'error' | 'closed';
 export interface PresenceEvent {
   version: 1;
@@ -20,14 +21,14 @@ export interface PresenceEvent {
   model?: string;
   provider?: string;
 }
-export const labels: Record<Agent, string> = {
+export const labels: Record<Agent, string> = new Proxy({
   codex: 'Codex', 'claude-code': 'Claude Code', opencode: 'OpenCode',
   pi: 'Pi', 'deepseek-harness': 'DeepSeek Harness',
-};
+} as Record<string, string>, {get: (_target, id) => typeof id === 'string' ? agentName(id) : undefined});
 export function parseEvent(value: unknown, now = Date.now()): PresenceEvent {
   if (!value || typeof value !== 'object') throw new Error('Expected event object');
   const e = value as Record<string, unknown>;
-  if (e.version !== 1 || !agents.includes(e.agent as Agent)) throw new Error('Unsupported protocol or agent');
+  if (e.version !== 1 || typeof e.agent !== 'string' || !agentEnabled(e.agent)) throw new Error('Unsupported protocol or agent');
   if (typeof e.sessionId !== 'string' || !e.sessionId.length || e.sessionId.length > 256) throw new Error('Invalid sessionId');
   if (!['idle', 'working', 'waiting', 'error', 'closed'].includes(e.state as string)) throw new Error('Invalid state');
   if (typeof e.updatedAt !== 'number' || !Number.isSafeInteger(e.updatedAt) || e.updatedAt < 0 || e.updatedAt > now + 60_000) throw new Error('Invalid updatedAt');

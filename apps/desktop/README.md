@@ -42,6 +42,11 @@ npm run desktop:build
 
 MyGo writes packaged apps to `apps/desktop/build/`. The package includes the compiled service, prompts, presets, package metadata, setup documentation, and agent plugins. Node.js 22+ remains a runtime prerequisite for the shared service. Node discovery respects `ADP_NODE`, then PATH. On macOS/Linux, a GUI launch without Node on PATH asks the user's interactive login shell once (with a three-second timeout), allowing initialized nvm, fnm, and other managers to supply Node. Additional fallbacks cover manager environment variables, user shims, and common installer locations. Windows discovery also checks nvm-windows/fnm/Volta environment paths and official installer locations. Set `ADP_NODE` to an executable path for a custom installation; an invalid explicit override reports an error. Generated macOS/Linux hooks resolve Node again in the agent's environment, retain a stable installer symlink when available, and can be refreshed by reapplying setup. Windows hooks continue to use the bundled PATH-based plugins; direct hook configuration generation targets POSIX shells. Configure release signing and notarization separately before distribution.
 
+On Windows, commands copied from the desktop setup dialog use PowerShell quoting
+and the discovered Node executable. Hook-file generation keeps its existing
+POSIX-only restriction. Node bridge and summary processes run without visible
+console windows.
+
 ## Structure
 
 ```text
@@ -63,3 +68,12 @@ The backend remains the source of truth. Settings save only on request, invalid 
 **Appearance → Profile buttons** adds up to two buttons with text (up to 32 characters, including supported templates) and an HTTPS link. Buttons support global and per-agent settings, update the draft preview, and publish after saving. Removing all buttons explicitly hides inherited buttons; **Inherit global** restores the agent's inherited appearance. Discord only shows these buttons to other users, so use another account or ask a friend to check the published profile.
 
 Discord supplies the account name and avatar through its existing RPC handshake, so no account token is needed. Profile customization and asset keys can render differently in the actual Discord client. Application language and theme preferences are stored separately in `appearance.json` in the desktop app's user-data directory.
+
+## External Agent plugins
+
+Optional packages are installed through **Agents → Install local plugin…** and
+managed in the same list as core integrations. External packages are distributed
+separately and are not registered by default or copied into the desktop bundle.
+Core agents, including Pi, retain their built-in integrations. The **⋯**
+menu distinguishes removing a plugin from removing its Agent-side integration.
+See [the external plugin guide](../../external-plugins/README.md).

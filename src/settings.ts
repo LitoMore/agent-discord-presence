@@ -7,6 +7,7 @@ import {DEFAULT_PROMPT_CONFIG} from './prompts.js';
 import {validatePresence, type PresenceOverrides} from './presentation.js';
 import {agents, type Agent} from './protocol.js';
 import {PRESETS} from './preset-data.js';
+import {agentKnown, validAgentID, getPlugin, agentName} from './agent-plugins.js';
 import {validateSummaryTriggers, type SummaryTrigger} from './integration-events.js';
 export interface Settings {enabled: boolean; summaryTriggers: SummaryTrigger[]; customPrompt: string; maxLength: number; model: string;
   service: 'session' | 'openai-compatible'; provider: string; baseUrl: string; apiKeyEnv: string; presence: PresenceOverrides}
@@ -73,7 +74,8 @@ export function validateSettings(value: unknown): Configuration {
     if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) throw new Error('Invalid agent settings');
     settings.agents = {};
     for (const [agent, patch] of Object.entries(overrides)) {
-      if (!agents.includes(agent as Agent)) throw new Error('Invalid agent settings');
+      // Saved scopes survive removal, or loading configuration before installing its plugin.
+      if (!validAgentID(agent)) throw new Error('Invalid agent settings');
       settings.agents[agent as Agent] = validateLayer(patch);
     }
   }
@@ -84,7 +86,8 @@ export function validateSettings(value: unknown): Configuration {
 export function resolveSettings(config: Configuration, agent?: Agent): Settings {
   const {agents: overrides, presets = [], ...base} = config;
   const {presets: agentPresets = [], ...explicit} = agent ? overrides?.[agent] ?? {} : {};
-  const defaults = agent ? {presence: {assets: PRESETS[agent]?.presence?.assets ?? {}}} : {};
+  const image = agent ? getPlugin(agent)?.manifest.presenceImage : undefined;
+  const defaults = agent ? {presence: {assets: image ? {large_image: image, large_text: agentName(agent)} : PRESETS[agent]?.presence?.assets ?? {}}} : {};
   let result: unknown = defaults;
   for (const layer of [resolvePresets(presets), resolvePresets(agentPresets), base, explicit]) {
     result = mergeSettings(result, layer);
@@ -104,7 +107,7 @@ export async function saveSetting(key: string, value: unknown, unset = false, ag
   if (keys.some(k => !k || ['__proto__', 'constructor', 'prototype'].includes(k)) || (keys.length > 1 && keys[0] !== 'presence')) throw new Error('Invalid setting path');
   let target = draft;
   if (agent) {
-    if (!agents.includes(agent)) throw new Error('Unknown agent');
+    if (!agentKnown(agent)) throw new Error('Unknown agent');
     const overrides = (draft.agents ??= {}) as Record<string, Record<string, unknown>>;
     target = overrides[agent] ??= {};
   }

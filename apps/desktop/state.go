@@ -24,9 +24,9 @@ var phaseLabels = map[string]string{"working": "Working", "waiting": "Waiting fo
 var stateLabels = map[string]string{"working": "Working", "waiting": "Waiting for input", "idle": "Idle", "error": "Needs attention", "closed": "Closed"}
 
 type session struct {
-	Key, Agent, State, Model, Provider string
-	StartedAt, UpdatedAt, LastSeen     int64
-	Summary                            *struct{ Topic, Subtitle string }
+	Key, Agent, State, Model, Provider, Label string
+	StartedAt, UpdatedAt, LastSeen            int64
+	Summary                                   *struct{ Topic, Subtitle string }
 }
 
 func (s session) agent() string {
@@ -39,7 +39,16 @@ func (s session) title() string {
 	if s.Summary != nil {
 		return s.Summary.Topic
 	}
-	return "Coding with " + agentLabels[s.agent()]
+	return "Coding with " + s.label()
+}
+func (s session) label() string {
+	if s.Label != "" {
+		return s.Label
+	}
+	if label := agentLabels[s.agent()]; label != "" {
+		return label
+	}
+	return s.agent()
 }
 
 type activity struct {
@@ -78,6 +87,9 @@ type settings struct {
 	Presence                                     map[string]any
 }
 type snapshot struct {
+	Agents, Plugins                  []agentDescriptor
+	PluginError                      *string
+	PluginInstall                    *pluginInstallState
 	Status                           *status
 	ServiceError, ConfigurationError *string
 	Configuration                    map[string]json.RawMessage
@@ -113,6 +125,7 @@ type uninstallPlan struct {
 	Details                                   []string
 	ManualReview                              bool
 	Partial                                   bool
+	NoteAgent                                 bool
 	InstalledEvents, SelectedEvents, Warnings []string
 	Catalog                                   []integrationEvent
 }
@@ -155,6 +168,14 @@ type editor struct {
 }
 
 type nativeApp struct {
+	pluginSource                        string
+	pluginSourceOpen                    bool
+	pluginSourceLocal                   bool
+	pluginSourcePreviousJob             string
+	pluginSourceError                   string
+	pluginConfirm                       string
+	pluginIcons                         map[string]ui.ImageSource
+	pluginIconData                      map[string]string
 	bridge                              *Desktop
 	data                                *snapshot
 	page, scope                         string
@@ -277,6 +298,7 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 	a.notice = ""
 	removing := request["action"] == "uninstall" || request["action"] == "uninstall-preview"
 	configuring := request["action"] == "setup" || request["action"] == "integration"
+	pluginInstalling := request["action"] == "plugin-install-start" || request["action"] == "plugin-install-cancel"
 	if configuring {
 		a.setupError = ""
 	}
@@ -294,12 +316,17 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 			}
 			a.busy = false
 			if err != nil {
-				a.err = err.Error()
+				if !pluginInstalling {
+					a.err = err.Error()
+				}
 				if removing {
 					a.removalError = err.Error()
 				}
 				if configuring {
 					a.setupError = err.Error()
+				}
+				if pluginInstalling {
+					a.pluginSourceError = err.Error()
 				}
 			} else {
 				a.accept(result)
@@ -323,9 +350,6 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		a.removalResult = nil
 		a.removalOpen = true
 		a.removalAll = !response.UninstallPlan.Partial
-		if response.UninstallPlan.Kind == "managed" {
-			a.removalAll = true
-		}
 		a.removalSelected = selectionMap(response.UninstallPlan.SelectedEvents)
 		a.removalDirty = false
 		if opening && !response.UninstallPlan.Partial && len(response.UninstallPlan.InstalledEvents) > 0 && len(response.UninstallPlan.Catalog) > 0 {
@@ -342,6 +366,11 @@ func (a *nativeApp) accept(response *desktopResponse) {
 	}
 	setupOpening := !a.setupOpen
 	if response.Integration != nil {
+		if response.SetupPlan == nil {
+			a.setupPlan = nil
+			a.setupResult = nil
+			a.setupDirty = false
+		}
 		a.setup = response.Integration
 		a.setupOpen = true
 		a.setupMode = 0
@@ -383,6 +412,9 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		return
 	}
 	next := response.Snapshot
+	if a.pluginSourceOpen && next.PluginInstall != nil && next.PluginInstall.ID != a.pluginSourcePreviousJob && next.PluginInstall.Phase == "installed" {
+		a.pluginSourceOpen, a.pluginSource = false, ""
+	}
 	var before *status
 	if a.data != nil {
 		before = a.data.Status
@@ -421,6 +453,11 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		a.events = a.events[:6]
 	}
 	a.data = next
+	a.refreshPluginIcons()
+	if a.scope != "Global · All agents" && a.scopeID(a.scope) == "global" {
+		a.scope = "Global · All agents"
+		a.edit = nil
+	}
 	if next.Status != nil {
 		if p := next.Status.Profile; p != nil && p.Avatar != "" {
 			a.loadImage("https://cdn.discordapp.com/avatars/" + p.ID + "/" + p.Avatar + ".png?size=128")
@@ -562,10 +599,10 @@ func (a *nativeApp) power() {
 	}
 	a.dispatch(map[string]any{"action": action}, notice)
 }
-func scopeID(scope string) string {
-	for id, label := range agentLabels {
-		if scope == label {
-			return id
+func (a *nativeApp) scopeID(scope string) string {
+	for _, agent := range a.agents() {
+		if scope == agent.Name {
+			return agent.ID
 		}
 	}
 	return "global"
@@ -589,7 +626,7 @@ func textValue(value any, fallback string) string {
 	return fallback
 }
 func (a *nativeApp) editor() *editor {
-	id := scopeID(a.scope)
+	id := a.scopeID(a.scope)
 	if a.edit != nil && a.edit.Scope == id && a.edit.Page == a.page {
 		return a.edit
 	}
@@ -718,7 +755,7 @@ func (a *nativeApp) resetEditor() {
 	if a.page == "Summaries" {
 		keys = []string{"enabled", "summaryTriggers", "customPrompt", "maxLength", "model", "service", "provider", "baseUrl", "apiKeyEnv"}
 	}
-	a.dispatch(map[string]any{"action": "reset", "scope": scopeID(a.scope), "keys": keys}, "Settings reset.")
+	a.dispatch(map[string]any{"action": "reset", "scope": a.scopeID(a.scope), "keys": keys}, "Settings reset.")
 }
 func elapsed(start int64) string {
 	seconds := max(int64(0), (time.Now().UnixMilli()-start)/1000)
@@ -732,11 +769,11 @@ func renderPreview(s *session, p map[string]any) *activity {
 	if s == nil {
 		return nil
 	}
-	subtitle := agentLabels[s.agent()] + " session"
+	subtitle := s.label() + " session"
 	if s.Summary != nil && s.Summary.Subtitle != "" {
 		subtitle = s.Summary.Subtitle
 	}
-	values := map[string]string{"topic": s.title(), "subtitle": subtitle, "agent": agentLabels[s.agent()], "phase": phaseLabels[s.State], "state": s.State}
+	values := map[string]string{"topic": s.title(), "subtitle": subtitle, "agent": s.label(), "phase": phaseLabels[s.State], "state": s.State}
 	render := func(text string) string {
 		for key, value := range values {
 			text = strings.ReplaceAll(text, "{"+key+"}", value)

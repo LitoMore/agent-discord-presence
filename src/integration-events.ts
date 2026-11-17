@@ -1,4 +1,5 @@
 import {agents, type Agent} from './protocol.js';
+import {pluginPolicy} from './agent-plugins.js';
 
 export type Capability = 'presence' | 'waiting' | 'tools' | 'errors' | 'summary' | 'cleanup';
 export interface IntegrationEvent {
@@ -73,7 +74,7 @@ export function scenariosFor(agent: Agent): IntegrationScenario[] {
   };
   return [
     {id: 'work-status', label: 'Track work status', description: 'Show working when a task starts and idle when a reply finishes.', events: byCapability('presence')},
-    {id: 'reply-summary', label: 'Summarize after each reply', description: 'Generate a title and subtitle when a reply finishes, while keeping the session open.', events: replyEvents[agent], summaryTrigger: 'reply' as const},
+    {id: 'reply-summary', label: 'Summarize after each reply', description: 'Generate a title and subtitle when a reply finishes, while keeping the session open.', events: replyEvents[agent] ?? byCapability('summary'), summaryTrigger: 'reply' as const},
     ...((agent === 'codex' || agent === 'claude-code') ? [{id: 'tool-summary', label: 'Summarize during tool calls', description: 'Generate activity text from tool names while working. Rapid calls are merged; tool arguments and output are excluded.', events: ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'], summaryTrigger: 'tool' as const}] : []),
     {id: 'waiting', label: 'Show when input is needed', description: 'Show waiting for permission or input, then restore working status.', events: byCapability('waiting', 'tools')},
     {id: 'errors', label: 'Show failures', description: 'Show an error when a reply or session fails.', events: byCapability('errors')},
@@ -92,6 +93,8 @@ export function scenarioSelection(agent: Agent, ids: unknown): {events: string[]
     summaryTriggers: validateSummaryTriggers(selected.flatMap(s => s.summaryTrigger ? [s.summaryTrigger] : []))};
 }
 export function catalogFor(agent: Agent): IntegrationEvent[] {
+  const policy = pluginPolicy(agent);
+  if (policy) return policy.events;
   if (!agents.includes(agent)) throw new Error('Unknown agent');
   return eventCatalog[agent];
 }

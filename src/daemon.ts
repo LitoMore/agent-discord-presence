@@ -11,6 +11,7 @@ import {loadSettings, resolveSettings} from './settings.js';
 import {buildPresencePrompt} from './prompts.js';
 import {boundedResponse} from './completion.js';
 import {nativeSummarySettings, type NativeSummaryJob} from './native-summary.js';
+import {agentEnabled, agentName} from './agent-plugins.js';
 import type {DiscordProfile} from './desktop-protocol.js';
 export interface Transport {status: string; readonly acknowledged?: boolean; readonly user?: DiscordProfile | null; start(): void; setActivity(activity: Activity | null): void; stop(): void}
 export async function startDaemon(options: {clientId?: string; dryRun?: boolean; path?: string; staleMs?: number;
@@ -63,7 +64,12 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
     const session = store.select();
     return activityFor(session, resolveSettings(settings, session?.agent).presence);
   }
-  function refresh() { reloadSettings(); store.sweep(); generation.reconcile(); transport.setActivity(currentActivity()); }
+  function prunePlugins() {
+    for (const [key, session] of store.sessions) if (!agentEnabled(session.agent)) {
+      store.sessions.delete(key); if (store.pinned === key) store.pinned = null;
+    }
+  }
+  function refresh() { reloadSettings(); prunePlugins(); store.sweep(); generation.reconcile(); transport.setActivity(currentActivity()); }
   const server = createServer(socket => {
     socket.setEncoding('utf8');
     sockets.add(socket); socket.on('close', () => sockets.delete(socket));
@@ -129,7 +135,7 @@ export async function startDaemon(options: {clientId?: string; dryRun?: boolean;
           settingsError, presence: resolveSettings(settings, store.select()?.agent).presence,
           agentSettings: Object.fromEntries([...new Set([...store.sessions.values()].map(s => s.agent))].map(agent => [agent, resolveSettings(settings, agent)])),
           generation: {...generation.status, ...settings, ...resolveSettings(settings), modelPolicy: 'override-or-session'},
-          sessions: [...store.sessions.values()].map(s => ({key: sessionKey(s), agent: s.agent, state: s.state, model: s.model, provider: s.provider, startedAt: s.startedAt, updatedAt: s.updatedAt, lastSeen: s.lastSeen, summary: s.summary})),
+          sessions: [...store.sessions.values()].map(s => ({key: sessionKey(s), agent: s.agent, label: agentName(s.agent), state: s.state, model: s.model, provider: s.provider, startedAt: s.startedAt, updatedAt: s.updatedAt, lastSeen: s.lastSeen, summary: s.summary})),
         } : {ok: true, nativeSummary}) + '\n');
       } catch (error) { socket.end(JSON.stringify({ok: false, error: (error as Error).message}) + '\n'); }
     });

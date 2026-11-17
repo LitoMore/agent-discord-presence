@@ -1,3 +1,4 @@
+import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, rm, readFile} from 'node:fs/promises';
@@ -14,7 +15,7 @@ async function until(predicate) {
 test('Harness lifecycle, concurrent approvals, summaries, cancellation, errors and unload', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'adp-dsh-'));
   const old = process.env.AGENT_PRESENCE_SOCKET;
-  process.env.AGENT_PRESENCE_SOCKET = join(dir, 'service.sock');
+  process.env.AGENT_PRESENCE_SOCKET = ipcPath(dir, 'service.sock');
   const generated = [];
   const daemon = await startDaemon({path: process.env.AGENT_PRESENCE_SOCKET,
     transport: {start() {}, stop() {}, setActivity() {}, status: 'test'},
@@ -73,7 +74,7 @@ test('Harness native summaries reuse its LLM route, honor settings, and discard 
   const {request} = await import('../dist/client.js');
   const dir = await mkdtemp(join(tmpdir(), 'adp-dsh-native-'));
   const oldSocket = process.env.AGENT_PRESENCE_SOCKET; const oldConfig = process.env.ADP_CONFIG;
-  process.env.AGENT_PRESENCE_SOCKET = join(dir, 'service.sock'); process.env.ADP_CONFIG = join(dir, 'config.json');
+  process.env.AGENT_PRESENCE_SOCKET = ipcPath(dir, 'service.sock'); process.env.ADP_CONFIG = join(dir, 'config.json');
   const configure = changes => writeFile(process.env.ADP_CONFIG, JSON.stringify({...DEFAULT_SETTINGS, ...changes}));
   await configure({});
   const daemon = await startDaemon({path: process.env.AGENT_PRESENCE_SOCKET,
