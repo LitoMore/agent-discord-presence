@@ -11,6 +11,7 @@ import {applySetup, hookCommand, managementCommand, planSetup, type SetupOptions
 import {selectEvents, scenarioSelection, validateSummaryTriggers} from './integration-events.js';
 import {entryContent} from './integration-config.js';
 import {listAgents, listPlugins, installPlugin, changePlugin, getPlugin, pluginSetup, pluginPolicy} from './agent-plugins.js';
+import {startPluginInstall, cancelPluginInstall, pluginInstallState} from './plugin-install.js';
 
 const cli = fileURLToPath(new URL('./cli.js', import.meta.url));
 const quote = (s: string) => "'" + s.replaceAll("'", process.platform === 'win32' ? "''" : "'\\''") + "'";
@@ -31,7 +32,7 @@ export async function desktopSnapshot(): Promise<DesktopSnapshot> {
   try { configuration = loadSettings(); } catch (error) { configurationError = (error as Error).message; }
   let descriptors = listAgents(), plugins: DesktopSnapshot['plugins'] = [], pluginError: string | null = null;
   try {plugins = listPlugins();} catch {pluginError = 'Plugin catalog is invalid. Restore plugins.json to manage plugins.';}
-  return {status, serviceError, configurationError, configuration, agents: descriptors, plugins, pluginError, effective: resolveSettings(configuration),
+  return {status, serviceError, configurationError, configuration, agents: descriptors, plugins, pluginError, pluginInstall: pluginInstallState(), effective: resolveSettings(configuration),
     agentSettings: Object.fromEntries(descriptors.map(agent => [agent.id, resolveSettings(configuration, agent.id)])) as DesktopSnapshot['agentSettings'],
     configPath: settingsPath(), socketPath: socketPath(), version: '0.0.3'};
 }
@@ -143,6 +144,12 @@ export async function handleDesktopRequest(value: unknown): Promise<DesktopRespo
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected desktop request');
     const message = value as DesktopRequest;
+    if (message.action === 'plugin-install-start') {
+      startPluginInstall(message.source); return {ok: true, snapshot: await desktopSnapshot()};
+    }
+    if (message.action === 'plugin-install-cancel') {
+      cancelPluginInstall(message.id); return {ok: true, snapshot: await desktopSnapshot()};
+    }
     if (message.action === 'plugin-install') {
       await installPlugin(message.path); return {ok: true, snapshot: await desktopSnapshot()};
     }

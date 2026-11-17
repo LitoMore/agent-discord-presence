@@ -24,6 +24,7 @@ const help = `agent-discord-presence
   uninstall AGENT           Remove Presence hooks or a plugin/extension entry
   uninstall AGENT --dry-run Preview removal without changing any files
   setup [AGENT]             Configure events (interactive by default)
+  plugin install SOURCE     Install github:OWNER/REPO[#REF] or a local folder
   events AGENT              List supported events and dependencies
   scenarios AGENT           List activity scenarios and their event combinations
   hook codex|claude-code    Receive a lifecycle hook on stdin
@@ -63,6 +64,27 @@ async function main() {
   if (values.profile !== undefined && command !== 'setup' && !generator) throw new Error('--profile is only available for setup or config AGENT');
   if (values.interactive && !['setup', 'uninstall'].includes(command)) throw new Error('--interactive is only available for setup or uninstall');
   if ((values.scenarios !== undefined || values['summary-triggers'] !== undefined) && command !== 'setup') throw new Error('--scenarios and --summary-triggers are only available for setup');
+  if (command === 'plugin') {
+    if (argument !== 'install' || positionals.length !== 3) throw new Error('Use plugin install github:OWNER/REPO[#REF] or plugin install /path/to/plugin');
+    const {installPluginSource} = await import('./plugin-install.js');
+    const {pluginSetup} = await import('./agent-plugins.js');
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    process.on('SIGINT', cancel); process.on('SIGTERM', cancel);
+    let previous = '', reportedAt = 0;
+    try {
+      const id = await installPluginSource(positionals[2], state => {
+        if (state.phase !== previous || (state.phase === 'downloading' && Date.now() - reportedAt >= 1000)) {
+          const bytes = state.bytes ? ` (${Math.ceil(state.bytes / 1024)} KB${state.total ? ` / ${Math.ceil(state.total / 1024)} KB` : ''})` : '';
+          console.error(`Plugin: ${state.phase}${bytes}`); reportedAt = Date.now();
+        }
+        if (state.phase === 'installed' && state.error) console.error(state.error);
+        previous = state.phase;
+      }, controller.signal);
+      console.log(`Installed ${id}. Waiting for the Agent integration.\n${pluginSetup(id)?.content ?? ''}`);
+    } finally {process.off('SIGINT', cancel); process.off('SIGTERM', cancel);}
+    return;
+  }
   if (command === 'scenarios') {
     if (positionals.length !== 2) throw new Error('Use scenarios AGENT');
     for (const s of scenariosFor(argument as Agent)) console.log(`${s.id}: ${s.label} — ${s.description}\n  Events: ${s.events.join(', ')}`);

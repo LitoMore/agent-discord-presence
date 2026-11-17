@@ -10,13 +10,15 @@ export interface AgentDescriptor {
   id: string; name: string; enabled: boolean; plugin: boolean; installed: boolean;
   version?: string; description?: string; icon?: string; error?: string; managedIntegration?: boolean;
   locales?: Record<string, Record<string, string>>;
+  source?: PluginSource;
 }
+export interface PluginSource {type: 'github'; spec: string; commit: string}
 interface Manifest {apiVersion: 1; id: string; name: string; version: string; description?: string;
   icon?: string; presenceImage?: string; extension?: string; summaryWorker?: string;
   integration?: {kind: 'policy'; events: IntegrationEvent[]; removalInstructions: string};
   locales?: Record<string, Record<string, string>>;
   setup?: {kind: 'manual'; instructions: string; command?: string[]}}
-interface Installation {path: string; enabled: boolean; installed: boolean}
+interface Installation {path: string; enabled: boolean; installed: boolean; source?: PluginSource}
 interface Catalog {version: 1; plugins: Record<string, Installation>}
 export interface AgentPlugin extends AgentDescriptor {root: string; manifest: Manifest}
 const manifestCache = new Map<string, {stamp: string; value: Manifest}>();
@@ -47,18 +49,37 @@ function state(): Catalog {
 async function save(data: Catalog): Promise<void> {
   const path = pluginStatePath(); await mkdir(dirname(path), {recursive: true});
   const temp = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temp, JSON.stringify(data, null, 2) + '\n'); await rename(temp, path);
+  try {await writeFile(temp, JSON.stringify(data, null, 2) + '\n'); await rename(temp, path);}
+  catch (error) {await rm(temp, {force: true}).catch(() => {}); throw error;}
+}
+// CLI and Desktop can change the same catalog from different processes.
+async function withPluginLock<T>(operation: () => Promise<T>): Promise<T> {
+  const lock = pluginStatePath() + '.lock';
+  await mkdir(dirname(lock), {recursive: true});
+  try {await mkdir(lock);} catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(`Another plugin change is in progress. If no installer is running, remove ${lock} and retry.`);
+    throw error;
+  }
+  try {return await operation();} finally {await rm(lock, {recursive: true, force: true});}
 }
 function asset(root: string, path: string): string {
   if (!path || isAbsolute(path)) throw new Error('Plugin paths must be relative');
-  const resolved = realpathSync(resolve(root, path));
+  let resolved: string;
+  try {resolved = realpathSync(resolve(root, path));} catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('The plugin package is incomplete. A file declared in adp-plugin.json is missing.');
+    throw error;
+  }
   const rel = relative(realpathSync(root), resolved);
   if (rel.startsWith('..') || isAbsolute(rel) || !lstatSync(resolved).isFile()) throw new Error('Plugin file must stay inside its package');
   return resolved;
 }
 export function readPlugin(root: string): Manifest {
   const path = resolve(root, 'adp-plugin.json');
-  const info = lstatSync(path);
+  let info;
+  try {info = lstatSync(path);} catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('No ADP plugin found. The source must contain adp-plugin.json at its root. Check the repository address or plugin folder.');
+    throw error;
+  }
   if (info.size > 16384) throw new Error('Plugin manifest is too large');
   const stamp = `${info.mtimeMs}:${info.ctimeMs}:${info.size}`;
   const cached = manifestCache.get(path);
@@ -66,8 +87,9 @@ export function readPlugin(root: string): Manifest {
   asset(root, 'adp-plugin.json');
   const text = readFileSync(path, 'utf8');
   if (Buffer.byteLength(text) > 16384) throw new Error('Plugin manifest is too large');
-  const m = JSON.parse(text) as Manifest;
-  if (m.apiVersion !== 1 || !validAgentID(m.id) || Object.hasOwn(builtinNames, m.id) || typeof m.name !== 'string' || !m.name.trim() || m.name.length > 80 || typeof m.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(m.version)) throw new Error('Invalid plugin manifest or unsupported API version');
+  let m: Manifest;
+  try {m = JSON.parse(text) as Manifest;} catch {throw new Error('The plugin manifest (adp-plugin.json) is invalid. Check the plugin source.');}
+  if (!m || typeof m !== 'object' || Array.isArray(m) || m.apiVersion !== 1 || !validAgentID(m.id) || Object.hasOwn(builtinNames, m.id) || typeof m.name !== 'string' || !m.name.trim() || m.name.length > 80 || typeof m.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(m.version)) throw new Error('Invalid plugin manifest or unsupported API version');
   if (m.description !== undefined && (typeof m.description !== 'string' || m.description.length > 500)) throw new Error('Invalid plugin description');
   for (const key of ['icon', 'extension', 'summaryWorker'] as const) if (m[key] !== undefined) {if (typeof m[key] !== 'string') throw new Error('Invalid plugin file'); asset(root, m[key]!);}
   if (m.icon && (!/\.(png|svg)$/.test(m.icon) || lstatSync(asset(root, m.icon)).size > 131072)) throw new Error('Use a PNG or SVG icon up to 128 KB');
@@ -119,7 +141,7 @@ export function listPlugins(): AgentDescriptor[] {
         icon = `data:${mime};base64,${bytes.toString('base64')}`;
       }
       return {id, name: m.name, version: m.version, description: m.description, locales: m.locales, icon, enabled: record.enabled && record.installed,
-        installed: record.installed, plugin: true, managedIntegration: !!m.integration};
+        installed: record.installed, plugin: true, managedIntegration: !!m.integration, source: record.source};
     } catch (error) { return {id, name: id, plugin: true, installed: record.installed, enabled: false, error: (error as Error).message}; }
   });
 }
@@ -133,7 +155,7 @@ export function getPlugin(id: string): AgentPlugin | undefined {
   try {
     const record = entries()[id]; if (!record?.installed) return;
     const manifest = readPlugin(record.path); if (manifest.id !== id) return;
-    return {id, name: manifest.name, enabled: record.enabled, installed: true, plugin: true, version: manifest.version, root: record.path, manifest};
+    return {id, name: manifest.name, enabled: record.enabled, installed: true, plugin: true, version: manifest.version, source: record.source, root: record.path, manifest};
   } catch { return; }
 }
 export function pluginPolicy(id: string): Manifest['integration'] { return getPlugin(id)?.manifest.integration; }
@@ -165,29 +187,38 @@ function checkPackage(root: string): void {
   }
   scan(root);
 }
-export async function installPlugin(source: string): Promise<void> {
+export async function installPlugin(source: string, options: {signal?: AbortSignal; source?: PluginSource; registering?: () => void} = {}): Promise<string> {
   if (typeof source !== 'string' || !source || source.length > 4096) throw new Error('Select a local plugin folder');
   const root = realpathSync(source); const m = readPlugin(root); checkPackage(root);
-  if (listAgents().some(a => a.id !== m.id && a.name.trim().toLocaleLowerCase() === m.name.trim().toLocaleLowerCase())) throw new Error('Another Agent already uses this display name');
-  const data = state();
-  if (Object.values(data.plugins).filter(p => p.installed).length >= 16 && !data.plugins[m.id]?.installed) throw new Error('At most 16 local Agent plugins can be installed');
-  if (data.plugins[m.id]?.installed) throw new Error('Plugin is already installed; remove it before installing another copy');
-  // A unique managed copy survives changes to the selected source directory.
-  const dest = join(dirname(pluginStatePath()), 'plugins', `${m.id}-${randomUUID()}`);
-  await mkdir(dirname(dest), {recursive: true});
-  try {await cp(root, dest, {recursive: true, dereference: false}); readPlugin(dest);
-    await writeFile(join(dest, '.adp-runtime.json'), JSON.stringify({sdk: new URL('./plugin-sdk.js', import.meta.url).href, config: pluginConfigPath(), socket: socketPath()}));
-    data.plugins[m.id] = {path: dest, installed: true, enabled: true}; await save(data);
-  } catch (error) {await rm(dest, {recursive: true, force: true}); throw error;}
+  options.signal?.throwIfAborted();
+  return withPluginLock(async () => {
+    if (listAgents().some(a => a.id !== m.id && a.name.trim().toLocaleLowerCase() === m.name.trim().toLocaleLowerCase())) throw new Error('Another Agent already uses this display name');
+    const data = state();
+    if (Object.values(data.plugins).filter(p => p.installed).length >= 16 && !data.plugins[m.id]?.installed) throw new Error('At most 16 local Agent plugins can be installed');
+    if (data.plugins[m.id]?.installed) throw new Error('Plugin is already installed; remove it before installing another copy');
+    // A unique managed copy survives changes to the selected source directory.
+    const dest = join(dirname(pluginStatePath()), 'plugins', `${m.id}-${randomUUID()}`);
+    await mkdir(dirname(dest), {recursive: true});
+    try {await cp(root, dest, {recursive: true, dereference: false});
+      const copied = readPlugin(dest); checkPackage(dest);
+      if (copied.id !== m.id || copied.version !== m.version || copied.name !== m.name) throw new Error('Plugin changed during installation; retry');
+      await writeFile(join(dest, '.adp-runtime.json'), JSON.stringify({sdk: new URL('./plugin-sdk.js', import.meta.url).href, config: pluginConfigPath(), socket: socketPath()}));
+      options.signal?.throwIfAborted(); options.registering?.();
+      data.plugins[m.id] = {path: dest, installed: true, enabled: true, ...options.source ? {source: options.source} : {}}; await save(data);
+      return m.id;
+    } catch (error) {await rm(dest, {recursive: true, force: true}); throw error;}
+  });
 }
 export async function changePlugin(id: string, action: 'enable' | 'disable' | 'remove'): Promise<void> {
   if (!['enable', 'disable', 'remove'].includes(action)) throw new Error('Unknown plugin action');
   if (!validAgentID(id) || Object.hasOwn(builtinNames, id)) throw new Error('Unknown plugin');
-  const data = state(); const entry = entries()[id]; if (!entry) throw new Error('Unknown plugin');
-  if (!entry.installed) throw new Error('Plugin is not installed');
-  data.plugins[id] = {...entry, installed: action !== 'remove', enabled: action === 'enable'};
-  if (action === 'enable') {const manifest = readPlugin(entry.path); if (manifest.id !== id) throw new Error('Plugin ID mismatch');}
-  await save(data);
+  await withPluginLock(async () => {
+    const data = state(); const entry = entries()[id]; if (!entry) throw new Error('Unknown plugin');
+    if (!entry.installed) throw new Error('Plugin is not installed');
+    data.plugins[id] = {...entry, installed: action !== 'remove', enabled: action === 'enable'};
+    if (action === 'enable') {const manifest = readPlugin(entry.path); if (manifest.id !== id) throw new Error('Plugin ID mismatch');}
+    await save(data);
+  });
 }
 export function pluginSetup(id: string, language = 'en'): {path: string; content: string; instructions: string} | undefined {
   const plugin = getPlugin(id); if (!plugin) return;

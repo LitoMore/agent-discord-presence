@@ -2,8 +2,137 @@ package main
 
 import (
 	"github.com/egoist/mygo/ui"
+	"strings"
 	"testing"
 )
+
+func TestGitHubPluginInstallProgressAndCancellation(t *testing.T) {
+	for _, width := range []int{760, 1120} {
+		for _, language := range []string{languageEnglish, languageChinese} {
+			a := fixtureApp()
+			a.page, a.prefs.Language = "Agents", language
+			var requests []map[string]any
+			a.dispatch = func(r map[string]any, _ string) { requests = append(requests, r) }
+			tt := ui.NewTester(a.view, width, 820)
+			if err := tt.Click(a.t("Install from GitHub…")); err != nil {
+				t.Fatal(err)
+			}
+			dialog := false
+			for _, info := range tt.AccessAll() {
+				dialog = dialog || info.Role == ui.RoleDialog
+			}
+			if !dialog {
+				t.Fatal("GitHub installation must open in a modal")
+			}
+			if err := tt.Click(a.t("GitHub source")); err != nil {
+				t.Fatal(err)
+			}
+			tt.Type("github:owner/repo#feature/plugins")
+			if err := tt.Click(a.t("Install plugin")); err != nil {
+				t.Fatal(err)
+			}
+			if len(requests) != 1 || requests[0]["action"] != "plugin-install-start" || requests[0]["source"] != "github:owner/repo#feature/plugins" {
+				t.Fatalf("install request: %#v", requests)
+			}
+			a.data.PluginInstall = &pluginInstallState{ID: "download-one", Spec: "github:owner/repo#" + strings.Repeat("a", 240), Phase: "downloading", Bytes: 1024, Total: 2048}
+			tt.Frame()
+			if !tt.HasText(a.t("Downloading plugin…")) || !tt.HasText("1 / 2 KB (50%)") {
+				t.Fatal("real download progress is missing")
+			}
+			for _, info := range tt.AccessAll() {
+				if info.Bounds.W > 0 && (info.Bounds.X < 0 || info.Bounds.X+info.Bounds.W > float32(width)+1) {
+					t.Fatalf("install UI overflows: %s", info.Name)
+				}
+			}
+			if err := tt.Click(a.t("Cancel installation")); err != nil {
+				t.Fatal(err)
+			}
+			if len(requests) != 2 || requests[1]["action"] != "plugin-install-cancel" || requests[1]["id"] != "download-one" {
+				t.Fatalf("cancel request: %#v", requests)
+			}
+			a.data.PluginInstall.Phase = "cancelling"
+			tt.Frame()
+			if !tt.HasText(a.t("Cancelling installation…")) {
+				t.Fatal("cancel was reported complete before cleanup")
+			}
+			message := "No ADP plugin found. The source must contain adp-plugin.json at its root. Check the repository address or plugin folder."
+			a.data.PluginInstall.Phase, a.data.PluginInstall.Error = "failed", message
+			a.accept(&desktopResponse{Snapshot: a.data})
+			tt.Frame()
+			if !a.pluginSourceOpen || !tt.HasText(a.t("Plugin installation failed")) || !tt.HasText(a.t(message)) {
+				t.Fatal("installation error is missing")
+			}
+			if language == languageChinese && tt.HasText(message) {
+				t.Fatal("installation error was not translated")
+			}
+			if err := tt.Click(a.t("Close")); err != nil {
+				t.Fatal(err)
+			}
+			if tt.HasText(a.t("Plugin installation failed")) || tt.HasText(a.t(message)) {
+				t.Fatal("closed installation errors must not remain on the Agents page")
+			}
+			if err := tt.Click(a.t("Install from GitHub…")); err != nil {
+				t.Fatal(err)
+			}
+			a.data.PluginInstall.ID = "download-two"
+			a.data.PluginInstall.Phase, a.data.PluginInstall.Error, a.data.PluginInstall.Agent = "installed", "", "orbit"
+			a.accept(&desktopResponse{Snapshot: a.data})
+			tt.Frame()
+			if a.pluginSourceOpen || a.pluginSource != "" || tt.HasText(a.t("GitHub source")) {
+				t.Fatal("successful installation did not close and clear the modal")
+			}
+			if tt.HasText(a.t("Installed · waiting for Agent integration")) {
+				t.Fatal("completed installation results must not remain on the Agents page")
+			}
+			saveTestImage(t, tt, "plugin-install-"+language+".png")
+			if err := tt.Click(a.t("Install from GitHub…")); err != nil {
+				t.Fatal(err)
+			}
+			a.accept(&desktopResponse{Snapshot: a.data})
+			tt.Frame()
+			if !a.pluginSourceOpen || !tt.HasText(a.t("GitHub source")) {
+				t.Fatal("an earlier installation result closed the reopened modal")
+			}
+		}
+	}
+}
+
+func TestActiveLocalPluginProgressCanBeReopened(t *testing.T) {
+	a := fixtureApp()
+	a.page = "Agents"
+	a.data.PluginInstall = &pluginInstallState{ID: "local-one", Spec: "/tmp/plugin", Phase: "installing"}
+	tt := ui.NewTester(a.view, 760, 620)
+	if tt.HasText("Installing plugin…") {
+		t.Fatal("installation progress must stay in its modal")
+	}
+	if err := tt.Click("Installation progress…"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("Installing plugin…") || tt.HasText("GitHub source") {
+		t.Fatal("local installation did not reopen its progress modal")
+	}
+	if err := tt.Click("Close"); err != nil {
+		t.Fatal(err)
+	}
+	if tt.HasText("Installing plugin…") {
+		t.Fatal("closing progress left a panel on the Agents page")
+	}
+}
+
+func TestIdlePluginDoesNotLookBrokenOrClaimToBeConnected(t *testing.T) {
+	a := fixtureApp()
+	a.page = "Agents"
+	a.data.Agents = append(a.agents(), agentDescriptor{ID: "orbit", Name: "Orbit", Installed: true, Enabled: true, Plugin: true})
+	tt := ui.NewTester(a.view, 1120, 820)
+	if !tt.HasText("Installed · waiting for Agent activity") {
+		t.Fatal("idle plugin state is missing")
+	}
+	a.data.Status.Sessions = append(a.data.Status.Sessions, session{Key: "orbit:one", Agent: "orbit", State: "idle"})
+	tt.Frame()
+	if tt.HasText("Installed · waiting for Agent activity") {
+		t.Fatal("a real session was ignored")
+	}
+}
 
 func TestPluginTranslationsStayScopedAndFollowLanguage(t *testing.T) {
 	a := fixtureApp()
@@ -90,6 +219,35 @@ func TestExternalPluginManagementLivesInAgents(t *testing.T) {
 			}
 			if len(requests) != 2 {
 				t.Fatal("plugin removed before confirmation")
+			}
+			dialog := false
+			for _, info := range tt.AccessAll() {
+				dialog = dialog || info.Role == ui.RoleDialog
+			}
+			if !dialog || !tt.HasText(a.t("Remove %s plugin?", "Orbit Agent")) {
+				t.Fatal("plugin removal must open a confirmation modal")
+			}
+			if err := tt.Click(a.t("Cancel")); err != nil {
+				t.Fatal(err)
+			}
+			if len(requests) != 2 || tt.HasText(a.t("Confirm removal")) {
+				t.Fatal("cancelling removal must close the modal without changing the plugin")
+			}
+			if err := tt.Click(a.t("Manage %s integration", "Orbit Agent")); err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.ChooseMenuItem(a.t("Remove plugin…")); err != nil {
+				t.Fatal(err)
+			}
+			tt.Key(0, ui.KeyEscape)
+			if a.pluginConfirm != "" || tt.HasText(a.t("Confirm removal")) {
+				t.Fatal("Escape must dismiss plugin removal")
+			}
+			if err := tt.Click(a.t("Manage %s integration", "Orbit Agent")); err != nil {
+				t.Fatal(err)
+			}
+			if err := tt.ChooseMenuItem(a.t("Remove plugin…")); err != nil {
+				t.Fatal(err)
 			}
 			if err := tt.Click(a.t("Confirm removal")); err != nil {
 				t.Fatal(err)

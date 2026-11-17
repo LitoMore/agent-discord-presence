@@ -89,6 +89,7 @@ type settings struct {
 type snapshot struct {
 	Agents, Plugins                  []agentDescriptor
 	PluginError                      *string
+	PluginInstall                    *pluginInstallState
 	Status                           *status
 	ServiceError, ConfigurationError *string
 	Configuration                    map[string]json.RawMessage
@@ -167,6 +168,11 @@ type editor struct {
 }
 
 type nativeApp struct {
+	pluginSource                        string
+	pluginSourceOpen                    bool
+	pluginSourceLocal                   bool
+	pluginSourcePreviousJob             string
+	pluginSourceError                   string
 	pluginConfirm                       string
 	pluginIcons                         map[string]ui.ImageSource
 	pluginIconData                      map[string]string
@@ -292,6 +298,7 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 	a.notice = ""
 	removing := request["action"] == "uninstall" || request["action"] == "uninstall-preview"
 	configuring := request["action"] == "setup" || request["action"] == "integration"
+	pluginInstalling := request["action"] == "plugin-install-start" || request["action"] == "plugin-install-cancel"
 	if configuring {
 		a.setupError = ""
 	}
@@ -309,12 +316,17 @@ func (a *nativeApp) execute(request map[string]any, notice string) {
 			}
 			a.busy = false
 			if err != nil {
-				a.err = err.Error()
+				if !pluginInstalling {
+					a.err = err.Error()
+				}
 				if removing {
 					a.removalError = err.Error()
 				}
 				if configuring {
 					a.setupError = err.Error()
+				}
+				if pluginInstalling {
+					a.pluginSourceError = err.Error()
 				}
 			} else {
 				a.accept(result)
@@ -400,6 +412,9 @@ func (a *nativeApp) accept(response *desktopResponse) {
 		return
 	}
 	next := response.Snapshot
+	if a.pluginSourceOpen && next.PluginInstall != nil && next.PluginInstall.ID != a.pluginSourcePreviousJob && next.PluginInstall.Phase == "installed" {
+		a.pluginSourceOpen, a.pluginSource = false, ""
+	}
 	var before *status
 	if a.data != nil {
 		before = a.data.Status

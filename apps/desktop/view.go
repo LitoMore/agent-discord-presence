@@ -146,6 +146,8 @@ func (a *nativeApp) view(c *ui.Context) {
 	})
 	a.setupDialog(c)
 	a.removalDialog(c)
+	a.pluginInstallDialog(c)
+	a.pluginRemovalDialog(c)
 	if c.Shortcut(ui.Cmd, ui.KeyS) {
 		a.saveEditor()
 	}
@@ -368,7 +370,12 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 	ui.Row(c).AlignItems(ui.Center).Gap(12).Margin(0, 0, 14, 0).Children(func() {
 		ui.Text(c, a.t("Your agents")).FontSize(13).FontWeight(600).Grow(1)
 		muted(c, a.t("%d agents", len(a.agents())))
-		ui.PrimaryButton(c, a.t("Install local plugin…")).Label(a.t("Install local Agent plugin")).FontSize(11).Disabled(a.busy).OnClick(a.selectPlugin)
+		installLabel := "Install from GitHub…"
+		if a.installingPlugin() {
+			installLabel = "Installation progress…"
+		}
+		ui.Button(c, a.t(installLabel)).FontSize(11).Disabled(a.busy).OnClick(a.openPluginInstaller)
+		ui.PrimaryButton(c, a.t("Install local plugin…")).Label(a.t("Install local Agent plugin")).FontSize(11).Disabled(a.busy || a.installingPlugin()).OnClick(a.selectPlugin)
 	})
 	if a.data.PluginError != nil {
 		ui.Text(c, a.t(*a.data.PluginError)).FontSize(11).TextColor(t.Danger).Role(ui.RoleAlert).Margin(0, 0, 14, 0)
@@ -393,6 +400,9 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 					muted(c, a.t(source)).FontSize(9).FontWeight(500).Padding(1, 5).Background(t.Surface).Radius(4).Shrink(0).Tooltip(a.t(help))
 				})
 				label := "No sessions detected"
+				if agent.Plugin {
+					label = "Installed · waiting for Agent activity"
+				}
 				if agent.Plugin && !agent.Enabled {
 					label = "Plugin disabled"
 				}
@@ -428,7 +438,6 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 		if agent.Error != "" {
 			ui.Text(c, agent.Error).FontSize(11).TextColor(t.Danger).Role(ui.RoleAlert)
 		}
-		a.pluginRemoval(c, agent)
 	}
 	ui.Column(c).Padding(15).Gap(5).Background(t.Surface).Radius(7).Margin(24, 0, 20, 0).Children(func() {
 		ui.Text(c, a.t("One service. Individual settings.")).FontSize(12).FontWeight(500)

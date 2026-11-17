@@ -5,6 +5,7 @@ import type {Summary} from './summary.js';
 import type {UninstallPlan, UninstallResult} from './uninstall.js';
 import type {SetupOptions, SetupPlan, SetupResult} from './setup.js';
 import type {AgentDescriptor} from './agent-plugins.js';
+import type {PluginInstallState} from './plugin-install.js';
 
 export interface DiscordProfile {id: string; username: string; globalName?: string; avatar?: string}
 export interface DesktopSession {
@@ -18,6 +19,7 @@ export interface ServiceStatus {
 }
 export interface DesktopSnapshot {
   agents: AgentDescriptor[]; plugins: AgentDescriptor[]; pluginError: string | null;
+  pluginInstall: PluginInstallState | null;
   status: ServiceStatus | null; serviceError: string | null; configurationError: string | null;
   configuration: Configuration; effective: Settings; agentSettings: Record<Agent, Settings>;
   configPath: string; socketPath: string; version: string;
@@ -25,6 +27,8 @@ export interface DesktopSnapshot {
 export type SettingsScope = 'global' | Agent;
 export type DesktopRequest =
   | {action: 'plugin-install'; path: string}
+  | {action: 'plugin-install-start'; source: string}
+  | {action: 'plugin-install-cancel'; id: string}
   | {action: 'plugin-enable' | 'plugin-disable' | 'plugin-remove'; agent: string}
   | {action: 'snapshot' | 'start' | 'stop'}
   | {action: 'pin'; key: string | null}

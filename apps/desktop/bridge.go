@@ -100,8 +100,15 @@ func (d *Desktop) stopWorker() {
 		return
 	}
 	d.input.Close()
-	_ = d.worker.Process.Kill()
-	_ = d.worker.Wait()
+	worker := d.worker
+	finished := make(chan struct{})
+	go func() { _ = worker.Wait(); close(finished) }()
+	select {
+	case <-finished:
+	case <-time.After(2 * time.Second):
+		_ = worker.Process.Kill()
+		<-finished
+	}
 	d.worker, d.input, d.output = nil, nil, nil
 }
 
