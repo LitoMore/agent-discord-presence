@@ -19,7 +19,8 @@
     "./pi": "./dist/adapters/pi.js",
     "./prompts": "./dist/prompts.js",
     "./presets": "./dist/presets.js",
-    "./deepseek-harness": "./dist/adapters/deepseek-harness.js"
+    "./deepseek-harness": "./dist/adapters/deepseek-harness.js",
+    "./plugin-sdk": "./dist/plugin-sdk.js"
   },
   "files": [
     "dist",

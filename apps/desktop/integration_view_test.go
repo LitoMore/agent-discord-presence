@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -21,7 +22,11 @@ func TestBackendScenarioCatalogFitsNativeSetup(t *testing.T) {
 		t.Skip("Build the shared service before checking its native setup catalog")
 	}
 	t.Setenv("ADP_CONFIG", filepath.Join(t.TempDir(), "config.json"))
-	for _, agent := range []string{"codex", "claude-code", "pi"} {
+	agents := []string{"codex", "claude-code", "pi"}
+	if runtime.GOOS == "windows" {
+		agents = []string{"opencode", "pi"}
+	}
+	for _, agent := range agents {
 		command := exec.Command(node, "--input-type=module", "-e", `import {handleDesktopRequest} from '../../dist/desktop.js'; console.log(JSON.stringify(await handleDesktopRequest({action:'integration',agent:process.argv[1],path:process.argv[2]})));`, agent, filepath.Join(t.TempDir(), "integration.json"))
 		data, err := command.Output()
 		if err != nil {

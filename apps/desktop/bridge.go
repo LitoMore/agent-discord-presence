@@ -77,6 +77,7 @@ func (d *Desktop) startWorker() error {
 		return err
 	}
 	cmd := exec.Command(node, path)
+	hideConsole(cmd)
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -97,7 +98,9 @@ func (d *Desktop) startWorker() error {
 	go func() {
 		defer close(lines)
 		scanner := bufio.NewScanner(output)
-		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		// Installed Agent icons appear in the snapshot; keep large catalogs bounded
+		// without cutting off otherwise valid multi-megabyte responses.
+		scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
 		for scanner.Scan() {
 			lines <- scanner.Text()
 		}

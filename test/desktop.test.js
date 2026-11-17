@@ -1,3 +1,4 @@
+import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
@@ -12,7 +13,7 @@ test('desktop uses the real daemon for lifecycle, pinning, and scoped settings w
   const keys=['ADP_CONFIG','AGENT_PRESENCE_SOCKET','ADP_DESKTOP_DRY_RUN'];
   const before=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
   process.env.ADP_CONFIG=join(dir,'config.json');
-  process.env.AGENT_PRESENCE_SOCKET=join(dir,'service.sock');
+  process.env.AGENT_PRESENCE_SOCKET=ipcPath(dir, 'service.sock');
   process.env.ADP_DESKTOP_DRY_RUN='1';
   t.after(async()=>{await handleDesktopRequest({action:'stop'});for(const key of keys){if(before[key]===undefined)delete process.env[key];else process.env[key]=before[key];}await rm(dir,{recursive:true,force:true});});
   let result=await handleDesktopRequest({action:'snapshot'});
@@ -55,13 +56,14 @@ test('desktop uses the real daemon for lifecycle, pinning, and scoped settings w
   assert.equal((await handleDesktopRequest({action:'stop'})).ok,true);
 });
 
-test('desktop returns installation-specific adapter instructions without changing agent files',()=>{
+test('desktop returns installation-specific adapter instructions without changing agent files',async t=>{
   for(const agent of ['codex','claude-code','opencode','pi','deepseek-harness']){
+    if(process.platform==='win32'&&['codex','claude-code'].includes(agent)){assert.throws(()=>integrationInstructions(agent),/On Windows/);continue;}
     const result=integrationInstructions(agent);
     assert.equal(result.agent,agent);assert.ok(result.content.length);
     assert.ok(result.prompt.includes(result.content));
     assert.match(result.prompt,/preserve existing settings, hooks, plugins, and extensions/);
-    assert.match(result.prompt,/dist[\/]cli\.js/);
+    assert.match(result.prompt,/dist[\\/]+cli\.js/);
     assert.match(result.prompt,/USAGE\.md/);
     assert.match(result.prompt,/AGENT_PRESENCE_SOCKET/);
     assert.match(result.prompt,/Verify the service and Discord connection/);
@@ -71,8 +73,9 @@ test('desktop returns installation-specific adapter instructions without changin
   assert.throws(()=>integrationInstructions('unknown'));
 });
 
-test('desktop localizes setup prompts for every agent without changing integration code or paths',async()=>{
+test('desktop localizes setup prompts for every agent without changing integration code or paths',async t=>{
   for(const agent of ['codex','claude-code','opencode','pi','deepseek-harness']){
+    if(process.platform==='win32'&&['codex','claude-code'].includes(agent))continue;
     const english=integrationInstructions(agent);
     assert.deepEqual(integrationInstructions(agent,'en'),english);
     const response=await handleDesktopRequest({action:'integration',agent,language:'zh-CN'});
@@ -89,7 +92,7 @@ test('desktop localizes setup prompts for every agent without changing integrati
     assert.match(chinese.prompt,/start --background/);
     assert.match(chinese.prompt,/ADP_CONFIG 和 AGENT_PRESENCE_SOCKET/);
     assert.match(chinese.prompt,/Node\.js 22\+/);
-    assert.match(chinese.prompt,/dist[\\/]cli\.js/);
+    assert.match(chinese.prompt,/dist[\\/]+cli\.js/);
     assert.match(chinese.prompt,/USAGE\.md/);
     assert.notEqual(chinese.instructions,english.instructions);
     if(agent==='codex')assert.match(chinese.prompt,/Codex \/hooks/);
@@ -100,8 +103,8 @@ test('desktop localizes setup prompts for every agent without changing integrati
 test('stdio bridge reports malformed messages and continues serving subsequent requests',async()=>{
   const child=spawn(process.execPath,['dist/desktop-bridge.js'],{stdio:'pipe'});
   let output='';let errors='';child.stdout.on('data',data=>output+=data);child.stderr.on('data',data=>errors+=data);
-  child.stdin.end('not json\n'+JSON.stringify({action:'integration',agent:'codex'})+'\n');
+  child.stdin.end('not json\n'+JSON.stringify({action:'integration',agent:'opencode'})+'\n');
   assert.equal(await new Promise(resolve=>child.on('exit',resolve)),0,errors);
   const messages=output.trim().split('\n').map(line=>JSON.parse(line));
-  assert.equal(messages.length,2);assert.equal(messages[0].ok,false);assert.equal(messages[1].integration.agent,'codex');
+  assert.equal(messages.length,2);assert.equal(messages[0].ok,false);assert.equal(messages[1].integration.agent,'opencode');
 });

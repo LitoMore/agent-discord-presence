@@ -93,19 +93,25 @@ func TestProfileButtonsFitSmallWindows(t *testing.T) {
 		for _, size := range [][2]int{{1120, 820}, {980, 740}, {760, 620}} {
 			a := fixtureApp()
 			a.page, a.prefs.Language = "Appearance", language
-			a.dispatch = func(map[string]any, string) {}
+			saved := false
+			a.dispatch = func(r map[string]any, _ string) { saved = r["action"] == "save" }
 			e := a.editor()
 			e.Buttons = []presenceButton{{Label: "Project", URL: "https://example.com"}, {Label: "Community", URL: "https://example.com/community"}}
 			e.ButtonsDirty, e.Dirty = true, true
 			tt := ui.NewTester(a.view, size[0], size[1])
-			tt.Scroll(500, 500, 0, 3000)
+			for attempt := 0; attempt < 12; attempt++ {
+				if err := tt.Click(a.t("Save changes")); err == nil {
+					break
+				}
+				tt.Scroll(500, 500, 0, 180)
+			}
 			for _, info := range tt.AccessAll() {
 				if info.Bounds.W > 0 && info.Bounds.H > 0 && (info.Bounds.X < 0 || info.Bounds.X+info.Bounds.W > float32(size[0])+1) {
 					t.Fatalf("buttons overflow at %v (%s): %+v", size, language, info)
 				}
 			}
-			if err := tt.Click(a.t("Save changes")); err != nil {
-				t.Fatalf("save is unreachable at %v (%s): %v", size, language, err)
+			if !saved {
+				t.Fatalf("save is unreachable at %v (%s)", size, language)
 			}
 		}
 	}

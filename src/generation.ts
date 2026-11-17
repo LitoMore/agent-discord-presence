@@ -8,6 +8,8 @@ import {parseSummary, type Summary} from './summary.js';
 import {boundedResponse} from './completion.js';
 import type {Agent} from './protocol.js';
 import type {SessionStore} from './store.js';
+import {getPlugin} from './agent-plugins.js';
+import {pluginSummary} from './plugin-worker.js';
 
 export interface ModelContext {model?: string; provider?: string}
 export type Generate = (agent: Agent, response: string, signal: AbortSignal, context?: ModelContext) => Promise<Summary>;
@@ -33,7 +35,7 @@ export function codexGenerator(config: Partial<PromptConfig> & {model?: string} 
         signal.throwIfAborted();
         const child = spawn(process.env.ADP_CODEX_COMMAND ?? 'codex', args, {
           cwd: directory, env: {...process.env, ADP_SUMMARY_WORKER: '1'}, stdio: ['pipe', 'ignore', 'ignore'],
-          signal, killSignal: 'SIGKILL',
+          signal, killSignal: 'SIGKILL', windowsHide: true,
         });
         child.on('error', reject);
         child.on('close', code => code === 0 ? resolve() : reject(new Error(`Codex summary process exited ${code}`)));
@@ -139,6 +141,8 @@ export async function generateSummary(settings: import('./settings.js').Settings
       size += chunk.length; if (size > 1024 * 1024) { await reader.cancel(); throw new GenerationError('Model response too large'); } chunks.push(chunk); }
     const envelope = JSON.parse(Buffer.concat(chunks).toString());
     value = JSON.parse(envelope.choices?.[0]?.message?.content ?? 'null');
+  } else if (getPlugin(agent)) {
+    value = await pluginSummary(agent, {model, provider: settings.provider || context.provider, input}, signal);
   } else {
     value = await nativeSummary(agent, input, model, settings.provider || context.provider, signal);
   }
@@ -168,7 +172,7 @@ async function nativeSummary(agent: Agent, input: ReturnType<typeof buildPresenc
     } else throw new GenerationError('This agent requires an explicit model service');
     const stdout = await new Promise<string>((resolve, reject) => {
       signal.throwIfAborted();
-      const child = spawn(command, args, {cwd: directory, env, signal, killSignal: 'SIGKILL', stdio: ['pipe', 'pipe', 'ignore']});
+      const child = spawn(command, args, {cwd: directory, env, signal, killSignal: 'SIGKILL', windowsHide: true, stdio: ['pipe', 'pipe', 'ignore']});
       let data = '';
       child.stdout.on('data', chunk => { data += chunk.toString(); if (Buffer.byteLength(data) > 1024 * 1024) { child.kill('SIGKILL'); reject(new GenerationError('Model response too large')); } });
       child.on('error', reject);

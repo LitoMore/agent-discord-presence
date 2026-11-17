@@ -19,6 +19,7 @@ func TestWorkerRoundTripAndRecovery(t *testing.T) {
 	source := `import {createInterface} from 'node:readline';
 for await (const line of createInterface({input:process.stdin})) {
   if (line.includes('stall')) await new Promise(resolve => setTimeout(resolve, 60000));
+  else if (line.includes('large')) process.stdout.write(JSON.stringify({payload:'x'.repeat(2*1024*1024)})+'\n');
   else process.stdout.write(JSON.stringify({echo:JSON.parse(line)})+'\n');
 }`
 	if err := os.WriteFile(path, []byte(source), 0600); err != nil {
@@ -34,6 +35,10 @@ for await (const line of createInterface({input:process.stdin})) {
 	}
 	if _, err := d.Call(context.Background(), "{}\n{}"); err == nil {
 		t.Fatal("accepted a multi-line request")
+	}
+	result, err = d.Call(context.Background(), `{"action":"large"}`)
+	if err != nil || len(result) < 2*1024*1024 {
+		t.Fatalf("large Agent catalog was truncated: %d bytes, %v", len(result), err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

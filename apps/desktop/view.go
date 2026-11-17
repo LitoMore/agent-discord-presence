@@ -120,7 +120,9 @@ func (a *nativeApp) view(c *ui.Context) {
 						ui.Text(c, a.t("The service is using its last valid configuration.")).TextColor(t.Danger).FontSize(12).Margin(0, 0, 16, 0)
 					}
 					width, _ := c.Size()
-					if width >= 980 {
+					if a.page == "Agents" {
+						a.pageView(c)
+					} else if width >= 980 {
 						ui.Row(c).AlignItems(ui.Start).Gap(26).Children(func() {
 							ui.Column(c).Grow(1).MinWidth(0).Children(func() { a.pageView(c) })
 							ui.Column(c).Width(306).Shrink(0).Padding(0, 0, 0, 24).BorderWidth(0, 0, 0, 1).BorderColor(t.Border).Children(func() { a.profileView(c) })
@@ -278,7 +280,7 @@ func (a *nativeApp) overview(c *ui.Context) {
 				dot(c, t.Border)
 				text := a.t(event.Text)
 				if event.Agent != "" {
-					text = agentLabels[event.Agent] + " · " + a.t(stateLabels[event.State])
+					text = a.agentLabel(event.Agent) + " · " + a.t(stateLabels[event.State])
 				}
 				ui.Text(c, text).FontSize(11).Grow(1)
 				age := "Just now"
@@ -308,7 +310,7 @@ func agentIcon(c *ui.Context, id string, size float32) {
 func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 	t := c.Theme()
 	selected := a.running() && a.data.Status.Selected != nil && *a.data.Status.Selected == s.Key
-	row := ui.ButtonBase(c.Key(s.Key)).Label(a.t("Pin %s: %s", agentLabels[s.agent()], a.sessionTitle(s))).Padding(14, 12).Gap(11).Radius(8).Border(1, t.Border).Margin(0, 0, 9, 0).Disabled(a.busy)
+	row := ui.ButtonBase(c.Key(s.Key)).Label(a.t("Pin %s: %s", a.agentLabel(s.agent()), a.sessionTitle(s))).Padding(14, 12).Gap(11).Radius(8).Border(1, t.Border).Margin(0, 0, 9, 0).Disabled(a.busy)
 	if compact {
 		row.Padding(9).Border(0, t.Border).Margin(0, 0, 4, 0)
 	}
@@ -325,10 +327,10 @@ func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 		if compact {
 			size = 29
 		}
-		agentIcon(c, s.agent(), size)
+		a.agentIcon(c, s.agent(), size)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
 			ui.Row(c).Gap(6).Children(func() {
-				ui.Text(c, agentLabels[s.agent()]).FontSize(12).FontWeight(500).Grow(1)
+				ui.Text(c, a.agentLabel(s.agent())).FontSize(12).FontWeight(500).Grow(1)
 				if selected {
 					label := "Showing"
 					if a.pinned() {
@@ -363,8 +365,16 @@ func (a *nativeApp) sessionRow(c *ui.Context, s session, compact bool) {
 }
 func (a *nativeApp) agentsView(c *ui.Context) {
 	t := c.Theme()
-	heading(c, a.t("Your agents"), a.t("5 supported agents"))
-	for _, id := range agentIDs {
+	ui.Row(c).AlignItems(ui.Center).Gap(12).Margin(0, 0, 14, 0).Children(func() {
+		ui.Text(c, a.t("Your agents")).FontSize(13).FontWeight(600).Grow(1)
+		muted(c, a.t("%d agents", len(a.agents())))
+		ui.PrimaryButton(c, a.t("Install local plugin…")).Label(a.t("Install local Agent plugin")).FontSize(11).Disabled(a.busy).OnClick(a.selectPlugin)
+	})
+	if a.data.PluginError != nil {
+		ui.Text(c, a.t(*a.data.PluginError)).FontSize(11).TextColor(t.Danger).Role(ui.RoleAlert).Margin(0, 0, 14, 0)
+	}
+	for _, agent := range a.agents() {
+		id := agent.ID
 		count := 0
 		for _, s := range a.sessions() {
 			if s.agent() == id {
@@ -372,24 +382,53 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 			}
 		}
 		ui.Row(c).Gap(12).Padding(16, 0).BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
-			agentIcon(c, id, 36)
-			ui.Column(c).Grow(1).Gap(4).Children(func() {
-				ui.Text(c, agentLabels[id]).FontSize(12).FontWeight(500)
+			a.agentIcon(c, id, 36)
+			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Tooltip(strings.TrimSpace(agent.Version + "\n" + a.agentText(agent.ID, agent.Description))).Children(func() {
+				ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+					ui.Text(c, a.agentLabel(id)).FontSize(12).FontWeight(500).SingleLine()
+					source, help := "Bundled", "Included with the app"
+					if agent.Plugin {
+						source, help = "Plugin", "Installed separately"
+					}
+					muted(c, a.t(source)).FontSize(9).FontWeight(500).Padding(1, 5).Background(t.Surface).Radius(4).Shrink(0).Tooltip(a.t(help))
+				})
 				label := "No sessions detected"
-				if count > 0 {
+				if agent.Plugin && !agent.Enabled {
+					label = "Plugin disabled"
+				}
+				if agent.Error != "" {
+					label = "Needs attention"
+				}
+				if count > 0 && agent.Enabled && agent.Error == "" {
 					label = a.t("%d active sessions", count)
 				}
 				muted(c, a.t(label))
 			})
-			ui.Button(c.Key("setup-"+id), a.t("Setup")).Label(a.t("Set up %s", agentLabels[id])).FontSize(11).Disabled(a.busy).OnClick(func() {
+			ui.Button(c.Key("setup-"+id), a.t("Setup")).Label(a.t("Set up %s", a.agentLabel(id))).FontSize(11).Disabled(a.busy || !agent.Enabled).OnClick(func() {
 				a.dispatch(map[string]any{"action": "integration", "agent": id, "language": a.prefs.Language}, "")
 			})
-			ui.Button(c.Key("manage-"+id), "⋯").Label(a.t("Manage %s integration", agentLabels[id])).Disabled(a.busy).Menu(func(m *ui.Menu) {
-				if m.Item(a.t("Remove integration…")).Danger().Chosen() {
+			ui.Button(c.Key("manage-"+id), "⋯").Label(a.t("Manage %s integration", a.agentLabel(id))).Disabled(a.busy).Menu(func(m *ui.Menu) {
+				if (!agent.Plugin || agent.ManagedIntegration) && m.Item(a.t("Remove integration…")).Danger().Chosen() {
 					a.dispatch(map[string]any{"action": "uninstall-preview", "agent": id}, "")
+				}
+				if agent.Plugin {
+					action, label := "plugin-enable", "Enable plugin"
+					if agent.Enabled {
+						action, label = "plugin-disable", "Disable plugin"
+					}
+					if m.Item(a.t(label)).Chosen() {
+						a.dispatch(map[string]any{"action": action, "agent": id}, "Agent plugin updated.")
+					}
+					if m.Item(a.t("Remove plugin…")).Danger().Chosen() {
+						a.pluginConfirm = id
+					}
 				}
 			})
 		})
+		if agent.Error != "" {
+			ui.Text(c, agent.Error).FontSize(11).TextColor(t.Danger).Role(ui.RoleAlert)
+		}
+		a.pluginRemoval(c, agent)
 	}
 	ui.Column(c).Padding(15).Gap(5).Background(t.Surface).Radius(7).Margin(24, 0, 20, 0).Children(func() {
 		ui.Text(c, a.t("One service. Individual settings.")).FontSize(12).FontWeight(500)
@@ -400,8 +439,8 @@ func (a *nativeApp) agentsView(c *ui.Context) {
 func (a *nativeApp) settingsView(c *ui.Context) {
 	t := c.Theme()
 	options := []string{"Global · All agents"}
-	for _, id := range agentIDs {
-		options = append(options, agentLabels[id])
+	for _, agent := range a.agents() {
+		options = append(options, agent.Name)
 	}
 	ui.Row(c).Gap(14).Margin(0, 0, 22, 0).Children(func() {
 		caption := muted(c, a.t("Settings scope")).Grow(1)
@@ -592,7 +631,7 @@ func (a *nativeApp) setupDialog(c *ui.Context) {
 	}
 	ui.Modal(c, &a.setupOpen, func() {
 		ui.Column(c).Width(560).MaxWidthPercent(100).Gap(14).Children(func() {
-			ui.Text(c, a.t("Set up %s", agentLabels[a.setup.Agent])).FontSize(19).FontWeight(600)
+			ui.Text(c, a.t("Set up %s", a.agentLabel(a.setup.Agent))).FontSize(19).FontWeight(600)
 			if ui.Segmented(c, &a.setupMode, a.t("Agent prompt"), a.t("Manual configuration")).FillEqually().Label(a.t("Setup method")).Changed() {
 				a.setupCopiedUntil = time.Time{}
 				a.setupCopyError = ""
@@ -600,10 +639,10 @@ func (a *nativeApp) setupDialog(c *ui.Context) {
 			content, copyLabel, fieldLabel := &a.setup.Prompt, "Copy prompt", "Setup prompt"
 			ui.Column(c).MinHeight(72).Gap(8).Children(func() {
 				if a.setupMode == 0 {
-					ui.Text(c, a.t("Paste this prompt into %s and let it configure the integration for you.", agentLabels[a.setup.Agent])).FontSize(12)
+					ui.Text(c, a.t("Paste this prompt into %s and let it configure the integration for you.", a.agentLabel(a.setup.Agent))).FontSize(12)
 				} else {
 					content, copyLabel, fieldLabel = &a.setup.Content, "Copy configuration", "Integration configuration"
-					ui.Text(c, a.t(a.setup.Instructions)).FontSize(12)
+					ui.Text(c, a.agentText(a.setup.Agent, a.setup.Instructions)).FontSize(12)
 					if a.setup.Path != "" {
 						ui.Text(c, a.setup.Path).Font("monospace").FontSize(11).Selectable()
 					}
@@ -654,7 +693,7 @@ func (a *nativeApp) removalDialog(c *ui.Context) {
 	done := a.removalResult != nil && a.removalResult.Removed
 	ui.Modal(c, &a.removalOpen, func() {
 		ui.Column(c).Width(640).MaxWidthPercent(100).Gap(18).Children(func() {
-			ui.Text(c, a.t("Remove %s integration", agentLabels[p.Agent])).FontSize(19).FontWeight(600)
+			ui.Text(c, a.t("Remove %s integration", a.agentLabel(p.Agent))).FontSize(19).FontWeight(600)
 			ui.Scroll(c).Scrollbars(false).Height(integrationScrollHeight(c)).Children(func() {
 				ui.Column(c).Gap(20).Children(func() {
 					if p.Kind != "managed" && !done {
@@ -696,7 +735,7 @@ func (a *nativeApp) removalDialog(c *ui.Context) {
 								})
 								muted(c, a.t("Select the events you want to remove."))
 							})
-							a.eventChoices(c, installed, a.removalSelected, true, func() { a.removalDirty = true })
+							a.eventChoices(c, p.Agent, installed, a.removalSelected, true, func() { a.removalDirty = true })
 							if p.Kind != "hooks" {
 								muted(c, a.t("Required plugin events stay active. Related events are selected together."))
 							}
@@ -738,7 +777,11 @@ func (a *nativeApp) removalDialog(c *ui.Context) {
 						}
 					}
 					if !done || p.ManualReview {
-						ui.Text(c, a.t(p.Note)).FontSize(12)
+						note := a.t(p.Note)
+						if p.NoteAgent {
+							note = a.agentText(p.Agent, p.Note)
+						}
+						ui.Text(c, note).FontSize(12)
 					}
 					if a.removalDirty {
 						muted(c, a.t("Preview the updated selection before removing it."))
@@ -951,7 +994,7 @@ func (a *nativeApp) activityImage(c *ui.Context, act *activity, s *session, dc *
 		if bitmap := a.images[act.Assets.LargeImage]; bitmap != nil {
 			ui.Image(c, bitmap).Size(58, 58).Radius(9).Fit(ui.Cover)
 		} else if s != nil {
-			agentIcon(c, s.agent(), 42)
+			a.agentIcon(c, s.agent(), 42)
 		} else {
 			ui.Icon(c, icons["game"]).Size(30, 30)
 		}
@@ -982,11 +1025,11 @@ func (a *nativeApp) trayView(c *ui.Context) {
 			if s != nil {
 				id = s.agent()
 			}
-			agentIcon(c, id, 48)
+			a.agentIcon(c, id, 48)
 			ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
 				label := "Agent Discord Presence"
 				if s != nil {
-					label = agentLabels[s.agent()]
+					label = a.agentLabel(s.agent())
 				}
 				muted(c, a.t(label))
 				title := a.t("Waiting for an agent")

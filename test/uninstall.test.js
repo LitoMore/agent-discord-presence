@@ -1,3 +1,4 @@
+import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdir, mkdtemp, readFile, writeFile, readdir, rm, stat, symlink} from 'node:fs/promises';
@@ -14,7 +15,8 @@ import {parseEntry} from '../dist/integration-config.js';
 const exec = promisify(execFile);
 async function fixture(t) {
   const dir = await mkdtemp(join(tmpdir(), 'adp-uninstall-'));
-  t.after(() => rm(dir, {recursive: true, force: true}));
+  const previous=process.env.ADP_CONFIG;process.env.ADP_CONFIG=join(dir,'config.json');
+  t.after(async()=>{if(previous===undefined)delete process.env.ADP_CONFIG;else process.env.ADP_CONFIG=previous;await rm(dir,{recursive:true,force:true});});
   return {dir, path: join(dir, 'integration.json')};
 }
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
@@ -32,7 +34,7 @@ for (const agent of ['codex', 'claude-code']) {
     const {path, dir} = await fixture(t);
     const root = await installationFixture(dir);
     const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
-    const environment = `ADP_CONFIG=${quote(join(dir, 'config.json'))} AGENT_PRESENCE_SOCKET=${quote(join(dir, 'service.sock'))}`;
+    const environment = `ADP_CONFIG=${quote(join(dir, 'config.json'))} AGENT_PRESENCE_SOCKET=${quote(ipcPath(dir, 'service.sock'))}`;
     for (const command of [
       `${environment} ${quote(process.execPath)} ${quote(cli)}`,
       `${environment} '/older/node/version/bin/node' ${quote(join(root, 'dist', 'cli.js'))}`,
@@ -98,7 +100,7 @@ for (const agent of ['opencode', 'pi']) {
 }
 
 for (const agent of ['codex', 'claude-code']) {
-  test(`${agent} removal preserves mixed hooks and unrelated settings, backs up original bytes, and is idempotent`, async t => {
+  test(`${agent} removal preserves mixed hooks and unrelated settings, backs up original bytes, and is idempotent`, {skip:process.platform==='win32'}, async t => {
     const {dir, path} = await fixture(t);
     const config = JSON.parse(integrationInstructions(agent).content);
     const expectedCount = Object.keys(config.hooks).length + 1;
@@ -193,8 +195,8 @@ test('invalid configurations, links, and stale confirmations never modify the ta
   assert.equal(await readFile(path, 'utf8'), source + '\n');
   assert.deepEqual(await readdir(dir), ['integration.json']);
   const link = join(dir, 'link');
-  await symlink(path, link);
-  assert.equal((await uninstallIntegration('codex', link)).plan.status, 'manual');
+  if(process.platform!=='win32'){await symlink(path, link);
+  assert.equal((await uninstallIntegration('codex', link)).plan.status, 'manual');}
   assert.equal(await readFile(path, 'utf8'), source + '\n');
   assert.equal((await planUninstall('pi', dir)).status, 'manual');
 });

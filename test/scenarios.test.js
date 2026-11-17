@@ -1,3 +1,4 @@
+import {ipcPath} from './ipc-path.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, readFile, writeFile, rm} from 'node:fs/promises';
@@ -50,7 +51,7 @@ test('scenario combinations include dependencies and only offer supported behavi
   for (const value of [null, 'tool', ['unknown']]) assert.throws(() => validateSettings({summaryTriggers: value}));
 });
 
-test('preview/apply saves timing, preserves advanced exclusions, and detects changed settings', async t => {
+test('preview/apply saves timing, preserves advanced exclusions, and detects changed settings', {skip:process.platform==='win32'}, async t => {
   const directory = await fixture(t), path = join(directory, 'hooks.json');
   await writeFile(process.env.ADP_CONFIG, JSON.stringify({model: 'keep', agents: {pi: {customPrompt: 'Keep this'}}}));
   let plan = await planSetup('codex', {path, scenarios: ['work-status', 'reply-summary', 'tool-summary', 'cleanup']});
@@ -82,7 +83,7 @@ test('preview/apply saves timing, preserves advanced exclusions, and detects cha
   assert.ok(JSON.parse(await readFile(path)).hooks.Stop); // Still publishes idle state.
 });
 
-test('CLI and both desktop copy paths include summary timing', async t => {
+test('CLI and both desktop copy paths include summary timing', {skip:process.platform==='win32'}, async t => {
   const directory = await fixture(t), path = join(directory, 'hooks.json');
   const args = ['dist/cli.js', 'setup', 'claude-code', '--path', path, '--scenarios', 'work-status,tool-summary,cleanup'];
   const env = {...process.env};
@@ -101,7 +102,7 @@ test('CLI and both desktop copy paths include summary timing', async t => {
 test('tool summaries run while working, merge rapid calls, survive tool completion, and yield to replies', async t => {
   const directory = await fixture(t);
   await writeFile(process.env.ADP_CONFIG, JSON.stringify({summaryTriggers: ['reply', 'tool']}));
-  const calls = [], path = join(directory, 'service.sock');
+  const calls = [], path = ipcPath(directory, 'service.sock');
   const daemon = await startDaemon({path, dryRun: true, log() {}, generate: async (_agent, input, signal) => {
     let finish;
     const promise = new Promise(resolve => { finish = resolve; });
@@ -145,7 +146,7 @@ test('tool summaries run while working, merge rapid calls, survive tool completi
 });
 
 test('disabled tool summaries keep lifecycle updates and reject manual-summary races', async t => {
-  const directory = await fixture(t), path = join(directory, 'service.sock');
+  const directory = await fixture(t), path = ipcPath(directory, 'service.sock');
   const calls = [];
   const daemon = await startDaemon({path, dryRun: true, log() {}, generate: async (_agent, input) => {
     let finish; const result = new Promise(resolve => { finish = resolve; });

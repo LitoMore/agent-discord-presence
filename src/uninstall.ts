@@ -6,8 +6,9 @@ import {basename, dirname, isAbsolute, join, resolve, sep} from 'node:path';
 import {mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {agents, type Agent} from './protocol.js';
+import {pluginPolicy} from './agent-plugins.js';
 import {catalogFor, selectEvents, selectionWarnings, validateEvents, type IntegrationEvent} from './integration-events.js';
-import {entryContent, parseEntry, policyPath} from './integration-config.js';
+import {entryContent, parseEntry, policyPath, policyManaged, policyContent} from './integration-config.js';
 
 export interface UninstallPlan {
   agent: Agent;
@@ -18,6 +19,7 @@ export interface UninstallPlan {
   details: string[];
   revision: string;
   note: string;
+  noteAgent?: boolean;
   manualReview: boolean;
   installedEvents: string[];
   selectedEvents: string[];
@@ -159,21 +161,23 @@ export async function recognizedEntry(source: string, agent: 'pi' | 'opencode'):
 }
 
 async function inspect(agent: Agent, path?: string, events?: string[]) {
-  if (!agents.includes(agent)) throw new Error('Unknown agent');
+  if (!agents.includes(agent) && !pluginPolicy(agent)) throw new Error('Unknown agent');
+  const policy = policyManaged(agent);
   if (events !== undefined) events = validateEvents(agent, events, false);
   if (path !== undefined && (typeof path !== 'string' || !path.trim() || path.includes('\0'))) throw new Error('Invalid integration path');
-  const plan: UninstallPlan = {agent, path: path === undefined ? integrationPath(agent) : resolve(path),
-    status: 'not-found', kind: agent === 'codex' || agent === 'claude-code' ? 'hooks' : 'entry', count: 0, details: [], revision: '',
+  const plan: UninstallPlan = {agent, path: policy ? policyPath(agent) : path === undefined ? integrationPath(agent) : resolve(path),
+    status: 'not-found', kind: agent === 'codex' || agent === 'claude-code' ? 'hooks' : policy ? 'managed' : 'entry', count: 0, details: [], revision: '',
     manualReview: false, installedEvents: [], selectedEvents: [], catalog: catalogFor(agent), warnings: [], partial: events !== undefined,
     note: 'No recognized integration was found at this path. Check project configuration and plugin-manager installations separately.'};
   let before: string | undefined, after: string | undefined, mode = 0o600;
-  if (agent === 'deepseek-harness' && events === undefined) {
+  if (policy && events === undefined) {
     plan.kind = 'managed'; plan.status = 'manual'; plan.path = '';
-    try { plan.installedEvents = validateEvents(agent, JSON.parse(await readFile(policyPath(), 'utf8')).events); }
+    try { plan.installedEvents = validateEvents(agent, JSON.parse(await readFile(policyPath(agent), 'utf8')).events); }
     catch { plan.installedEvents = selectEvents(agent); }
-    plan.note = 'Remove Agent Discord Presence using the Harness plugin manager in the profile where it was installed, then restart Harness.';
+    plan.note = pluginPolicy(agent)?.removalInstructions ?? 'Remove Agent Discord Presence using the Harness plugin manager in the profile where it was installed, then restart Harness.';
+    plan.noteAgent = !!pluginPolicy(agent);
   } else {
-    if (agent === 'deepseek-harness') plan.path = policyPath();
+    if (policy) plan.path = policyPath(agent);
     try {
       const info = await lstat(plan.path);
       if (!info.isFile() || info.isSymbolicLink()) {
@@ -202,7 +206,7 @@ async function inspect(agent: Agent, path?: string, events?: string[]) {
             plan.status = 'manual'; plan.note = 'The hook configuration is invalid or unsupported. Review it manually; nothing was changed.';
           }
         } else {
-          const entry = agent === 'deepseek-harness'
+          const entry = policy
             ? {source: '', events: validateEvents(agent, JSON.parse(before).events)}
             : await recognizedEntry(before, agent as 'opencode' | 'pi');
           if (entry) {
@@ -211,7 +215,7 @@ async function inspect(agent: Agent, path?: string, events?: string[]) {
             if (events !== undefined) {
               const remaining = validateEvents(agent, entry.events.filter(id => !events.includes(id)));
               if (plan.selectedEvents.length) {
-                after = agent === 'deepseek-harness' ? JSON.stringify({events: remaining}, null, 2) + '\n'
+                after = policy ? policyContent(remaining, before)
                   : entryContent(agent as 'opencode' | 'pi', remaining) + '\n';
                 plan.details = plan.selectedEvents;
                 plan.status = 'ready';
@@ -229,7 +233,7 @@ async function inspect(agent: Agent, path?: string, events?: string[]) {
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      if (agent === 'deepseek-harness' && events !== undefined) {
+      if (policy && events !== undefined) {
         const installed = selectEvents(agent);
         const remaining = validateEvents(agent, installed.filter(id => !events.includes(id)));
         plan.installedEvents = installed; plan.selectedEvents = events;

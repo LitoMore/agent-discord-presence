@@ -14,6 +14,27 @@ const (
 // English source messages are the fallback for missing or unsupported translations.
 // Keep protocol values, user content, and published Discord activity out of this catalog.
 var chineseMessages = map[string]string{
+	"Bundled":               "内置",
+	"Plugin":                "插件",
+	"Included with the app": "随应用附带",
+	"Installed separately":  "单独安装",
+	"Agent options are saved separately. Install or reload the Agent plugin to apply these options.":                      "事件策略将单独保存，请安装或重新加载 Agent 端插件使其生效。",
+	"After saving these options, install or reload the Agent-side plugin using the instructions in Manual configuration.": "保存事件策略后，请按“手动配置”中的说明安装或重新加载 Agent 端插件。",
+	"%d agents":                  "%d 个 Agent",
+	"Install local plugin…":      "安装本地插件…",
+	"Install local Agent plugin": "安装本地 Agent 插件",
+	"Install an Agent plugin":    "安装 Agent 插件",
+	"Agent plugin installed.":    "Agent 插件已安装。",
+	"Agent plugin updated.":      "Agent 插件已更新。",
+	"Agent plugin removed.":      "Agent 插件已移除。",
+	"Plugin disabled":            "插件已禁用",
+	"Enable plugin":              "启用插件",
+	"Disable plugin":             "禁用插件",
+	"Remove plugin…":             "移除插件…",
+	"Remove %s plugin?":          "移除 %s 插件？",
+	"Your settings and Agent-side files will be kept.": "保留已有设置和 Agent 端配置文件。",
+	"Confirm removal": "确认移除",
+	"Plugin catalog is invalid. Restore plugins.json to manage plugins.": "插件目录配置无效，请修复 plugins.json 后再管理插件。",
 	"Profile buttons": "资料卡按钮",
 	"Up to 2":         "最多 2 个",
 	"Buttons are visible to other users on Discord. You cannot see them on your own profile.":   "按钮仅对 Discord 中的其他用户可见，查看自己的资料卡时不会显示。",
@@ -399,5 +420,5 @@ func (a *nativeApp) sessionTitle(s session) string {
 	if s.Summary != nil {
 		return s.Summary.Topic
 	}
-	return a.t("Coding with %s", agentLabels[s.agent()])
+	return a.t("Coding with %s", a.agentLabel(s.agent()))
 }

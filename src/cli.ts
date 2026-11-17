@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {agentKnown, pluginPolicy} from './agent-plugins.js';
 import {parseArgs} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {startDaemon} from './daemon.js';
@@ -51,7 +52,7 @@ async function main() {
   }});
   const [command, argument] = positionals;
   const agent = values.agent as Agent | undefined;
-  if (agent !== undefined && (!agents.includes(agent) || !((command === 'config' && ['show', 'set', 'unset'].includes(argument)) || (command === 'preset' && argument === 'apply')))) throw new Error('Use --agent with config show/set/unset or preset apply and a supported agent name');
+  if (agent !== undefined && (!agentKnown(agent) || !((command === 'config' && ['show', 'set', 'unset'].includes(argument)) || (command === 'preset' && argument === 'apply')))) throw new Error('Use --agent with config show/set/unset or preset apply and a supported agent name');
   if (values.socket) process.env.AGENT_PRESENCE_SOCKET = values.socket;
   if (!command || values.help) { console.log(help); return; }
   if (values.background && command !== 'start') throw new Error('--background is only available for start');
@@ -72,7 +73,7 @@ async function main() {
     return;
   }
   if (command === 'setup' || command === 'uninstall') {
-    if ((argument !== undefined && !agents.includes(argument as Agent)) || positionals.length > 2) throw new Error(`Use ${command} codex|claude-code|opencode|pi|deepseek-harness [--events NAME,...] [--dry-run] [--path FILE]`);
+    if ((argument !== undefined && !agents.includes(argument as Agent) && !pluginPolicy(argument)) || positionals.length > 2) throw new Error(`Use ${command} AGENT [--events NAME,...] [--dry-run] [--path FILE]`);
     await runManagement(command, argument, values);
     return;
   }

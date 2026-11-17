@@ -4,10 +4,11 @@ import type {Configuration, Settings, SettingsLayer} from './settings.js';
 import type {Summary} from './summary.js';
 import type {UninstallPlan, UninstallResult} from './uninstall.js';
 import type {SetupOptions, SetupPlan, SetupResult} from './setup.js';
+import type {AgentDescriptor} from './agent-plugins.js';
 
 export interface DiscordProfile {id: string; username: string; globalName?: string; avatar?: string}
 export interface DesktopSession {
-  key: string; agent?: Agent; state: State; model?: string; provider?: string;
+  key: string; agent?: Agent; label?: string; state: State; model?: string; provider?: string;
   startedAt: number; updatedAt: number; lastSeen: number; summary?: Summary;
 }
 export interface ServiceStatus {
@@ -16,12 +17,15 @@ export interface ServiceStatus {
   sessions: DesktopSession[]; profile?: DiscordProfile | null;
 }
 export interface DesktopSnapshot {
+  agents: AgentDescriptor[]; plugins: AgentDescriptor[]; pluginError: string | null;
   status: ServiceStatus | null; serviceError: string | null; configurationError: string | null;
   configuration: Configuration; effective: Settings; agentSettings: Record<Agent, Settings>;
   configPath: string; socketPath: string; version: string;
 }
 export type SettingsScope = 'global' | Agent;
 export type DesktopRequest =
+  | {action: 'plugin-install'; path: string}
+  | {action: 'plugin-enable' | 'plugin-disable' | 'plugin-remove'; agent: string}
   | {action: 'snapshot' | 'start' | 'stop'}
   | {action: 'pin'; key: string | null}
   | {action: 'save'; scope: SettingsScope; patch: SettingsLayer; unset?: ('presence.assets.large_image')[]}
